@@ -84,3 +84,64 @@ export const getLeaderboard = asyncHandler(async (req: Request, res: Response) =
 
   res.json({ leaderboard: leaders });
 });
+
+export const getXPHistory = asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.uid;
+
+  // 1. Fetch Discoveries (XP = 50 * rarityScore)
+  const discoveries = await prisma.discovery.findMany({
+    where: { userId },
+    select: {
+      id: true,
+      discoveredAt: true,
+      rarityScore: true,
+      object: { select: { commonName: true } }
+    },
+    orderBy: { discoveredAt: 'desc' },
+    take: 20
+  });
+
+  // 2. Fetch Care Logs (XP = 50 for TASK, 20 for CHECKIN)
+  const careLogs = await prisma.careLog.findMany({
+    where: { userId },
+    select: {
+      id: true,
+      createdAt: true,
+      action: true,
+      plant: { select: { object: { select: { commonName: true } } } }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20
+  });
+
+  // 3. Normalize & Merge
+  const discoveryItems = discoveries.map(d => ({
+    type: "DISCOVERY",
+    title: `Discovered a ${d.object.commonName}`,
+    date: d.discoveredAt,
+    xp: Math.floor(50 * d.rarityScore)
+  }));
+
+  const careItems = careLogs.map(c => {
+    let xp = 20;
+    let title = "Daily Check-in";
+    
+    if (c.action === "TASK_COMPLETE") {
+      xp = 50;
+      title = `Care Task for ${c.plant.object.commonName}`;
+    } else if (c.action === "DAILY_CHECKIN") {
+      title = `Check-in for ${c.plant.object.commonName}`;
+    }
+
+    return {
+      type: "CARE",
+      title: title,
+      date: c.createdAt,
+      xp: xp
+    };
+  });
+
+  const history = [...discoveryItems, ...careItems].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  res.json({ history });
+});

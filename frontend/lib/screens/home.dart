@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:frontend/screens/userDetailScreen.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/models/discovery.dart';
 import 'package:frontend/screens/authScreen.dart';
@@ -17,6 +18,8 @@ import 'package:frontend/screens/leader.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:frontend/widgets/sos_button.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -566,7 +569,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Expanded(
                             child: _actionTile(
-                              icon: Icons.camera_alt,
+                              tileIcon: Icons.camera_alt,
                               label: "Camera",
                               color: Colors.green,
                               onTap: () => openCamera(context),
@@ -575,14 +578,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(width: 14),
                           Expanded(
                             child: _actionTile(
-                              icon: Icons.photo_library,
-                              label: "Photos",
+                              tileIcon: Icons.account_circle_rounded,
+                              label: "User",
                               color: Colors.blue,
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const StoredImageScreen(),
+                                    builder: (_) => const UserDetailScreen(),
                                   ),
                                 );
                               },
@@ -595,7 +598,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Expanded(
                             child: _actionTile(
-                              icon: Icons.leaderboard,
+                              tileIcon: Icons.leaderboard,
                               label: "Leaderboard",
                               color: Colors.orange,
                               onTap: () {
@@ -612,7 +615,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(width: 14),
                           Expanded(
                             child: _actionTile(
-                              icon: Icons.logout,
+                              tileIcon: Icons.logout,
                               label: "LogOut",
                               color: Colors.purple,
                               onTap: () async {
@@ -635,6 +638,40 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
+            ),
+          ),
+          // SOS Button (Top Left)
+          Positioned(
+            top: 60,
+            left: 20,
+            child: SOSButton(
+              onSOS: () async {
+                final location = _currentLocation ?? await getCurrentLocation();
+                if (!mounted) return;
+
+                final String lat = location.latitude.toStringAsFixed(6);
+                final String lng = location.longitude.toStringAsFixed(6);
+                final String mapLink = "https://maps.google.com/?q=$lat,$lng";
+                
+                final Uri smsLaunchUri = Uri(
+                  scheme: 'sms',
+                  path: '112', // Emergency number or user defined contact
+                  queryParameters: <String, String>{
+                    'body': 'SOS! I need help. My current location: $mapLink',
+                  },
+                );
+
+                if (await canLaunchUrl(smsLaunchUri)) {
+                   await launchUrl(smsLaunchUri);
+                } else {
+                   // Fallback if SMS fails
+                   if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Could not launch SMS. Authority notified via App.")),
+                      );
+                   }
+                }
+              },
             ),
           ),
 
@@ -660,7 +697,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _actionTile({
-    required IconData icon,
+    required IconData tileIcon,
     required String label,
     required Color color,
     required VoidCallback onTap,
@@ -682,7 +719,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 30),
+            Icon(tileIcon, color: color, size: 30),
             const SizedBox(height: 8),
             Text(
               label,

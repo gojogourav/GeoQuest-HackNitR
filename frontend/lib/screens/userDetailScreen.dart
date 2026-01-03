@@ -22,6 +22,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
   int userLevel = 1;
   int userXp = 0;
   List<Discovery> discoveries = [];
+  List<dynamic> xpHistory = [];
   bool isLoading = true;
 
   @override
@@ -40,10 +41,12 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
 
       final profileFuture = ApiService.syncUserWithBackend(token);
       final discoveriesFuture = ApiService.getUserDiscoveries(token);
+      final historyFuture = ApiService.getXPHistory(token);
 
-      final results = await Future.wait([profileFuture, discoveriesFuture]);
+      final results = await Future.wait([profileFuture, discoveriesFuture, historyFuture]);
       final profileData = results[0] as Map<String, dynamic>?;
       final discoveriesList = results[1] as List<dynamic>;
+      final historyList = results[2] as List<dynamic>;
 
       final mappedDiscoveries = discoveriesList.map((d) {
         return Discovery(
@@ -74,6 +77,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
             userPhoto = user.photoURL;
           }
           discoveries = mappedDiscoveries;
+          xpHistory = historyList;
           isLoading = false;
         });
       }
@@ -149,6 +153,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                       ),
                     ),
                   )
+
                 : SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
                   sliver: SliverGrid(
@@ -164,6 +169,86 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                     ),
                   ),
                 ),
+
+              if (xpHistory.isNotEmpty) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: const Text(
+                      "XP History",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final item = xpHistory[index];
+                      final isDiscovery = item['type'] == 'DISCOVERY';
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: (isDiscovery ? Colors.green : Colors.blue).withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                isDiscovery ? Icons.camera_alt : Icons.water_drop,
+                                color: isDiscovery ? Colors.greenAccent : Colors.lightBlueAccent,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item['title'] ?? "Activity",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    item['date'] != null 
+                                      ? DateTime.parse(item['date']).toLocal().toString().split(' ')[0] 
+                                      : "",
+                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              "+${item['xp']} XP",
+                              style: const TextStyle(
+                                color: Colors.amber,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    childCount: xpHistory.length,
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 50)),
+              ],
             ],
           ),
 
