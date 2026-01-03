@@ -11,6 +11,7 @@ import 'package:frontend/screens/authScreen.dart';
 import 'package:frontend/screens/cameraScreen.dart';
 import 'package:frontend/screens/imagePreviewScreen.dart';
 import 'package:frontend/screens/storedImageScreen.dart';
+import 'package:frontend/screens/leader.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -401,7 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: const Icon(
-                          Icons.rocket_launch_outlined,
+                          Icons.rocket_launch,
                           color: Colors.greenAccent,
                           size: 22,
                         ),
@@ -523,11 +524,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Expanded(
                             child: _actionTile(
-                              icon: Icons.person,
-                              label: "Community",
+                              icon: Icons.leaderboard,
+                              label: "Leaderboard",
                               color: Colors.orange,
                               onTap: () {
-                                // go home
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const LeaderboardPage(),
+                                  ),
+                                );
                               },
                             ),
                           ),
