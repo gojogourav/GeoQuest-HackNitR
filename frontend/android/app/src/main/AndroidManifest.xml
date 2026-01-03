@@ -9,6 +9,17 @@
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="sms" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+    </queries>
+
     <application
         android:label="GeoQuest"
         android:name="${applicationName}"

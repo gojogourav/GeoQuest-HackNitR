@@ -133,5 +133,27 @@ class ApiService {
       return null;
     }
   }
+  static Future<List<dynamic>> getXPHistory(String firebaseToken) async {
+    try {
+      final url = Uri.parse('$baseUrl/user/xp-history');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $firebaseToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return jsonResponse['history'] ?? [];
+      } else {
+        print("❌ Fetch XP History Failed (${response.statusCode}): ${response.body}");
+        return [];
+      }
+    } catch (e) {
+      print("⚠️ Connection Error: $e");
+      return [];
+    }
+  }
 }
->>>>>>> b4dad48c8dcccbb48d73cf88db3e5184cea40436

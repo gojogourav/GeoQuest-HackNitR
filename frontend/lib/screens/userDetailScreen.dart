@@ -22,6 +22,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
   int userLevel = 1;
   int userXp = 0;
   List<Discovery> discoveries = [];
+  List<dynamic> xpHistory = [];
   bool isLoading = true;
 
   @override
@@ -40,10 +41,16 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
 
       final profileFuture = ApiService.syncUserWithBackend(token);
       final discoveriesFuture = ApiService.getUserDiscoveries(token);
+      final historyFuture = ApiService.getXPHistory(token);
 
-      final results = await Future.wait([profileFuture, discoveriesFuture]);
+      final results = await Future.wait([
+        profileFuture,
+        discoveriesFuture,
+        historyFuture,
+      ]);
       final profileData = results[0] as Map<String, dynamic>?;
       final discoveriesList = results[1] as List<dynamic>;
+      final historyList = results[2] as List<dynamic>;
 
       final mappedDiscoveries = discoveriesList.map((d) {
         return Discovery(
@@ -75,6 +82,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
             userPhoto = user.photoURL;
           }
           discoveries = mappedDiscoveries;
+          xpHistory = historyList;
           isLoading = false;
         });
       }
