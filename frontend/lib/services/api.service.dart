@@ -6,7 +6,10 @@ class ApiService {
   // Use 10.0.2.2 for Android Emulator, localhost for iOS/Web
   static String get baseUrl {
     if (Platform.isAndroid) {
-      return "http://10.0.2.2:3000/api";
+       // If using 'adb reverse tcp:3000 tcp:3000', use localhost/127.0.0.1
+       // If standard emulator without reverse, 10.0.2.2 is needed.
+       // We can try to prefer localhost if we assume adb reverse is active.
+       return "http://127.0.0.1:3000/api";
     }
     return "http://localhost:3000/api";
   }
@@ -66,7 +69,7 @@ class ApiService {
     if (state != null) request.fields['state'] = state;
     if (country != null) request.fields['country'] = country;
 
-    final streamedResponse = await request.send();
+    final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
     return await http.Response.fromStream(streamedResponse);
   }
 }
