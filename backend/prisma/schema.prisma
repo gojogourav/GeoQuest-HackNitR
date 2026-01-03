@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AIScan {
+  id           String   @id
+  userId       String
+  imageUrl     String
+  detectedName String
+  confidence   Float
+  usedCredit   Boolean
+  createdAt    DateTime @default(now())
+  User         User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Discovery {
+  id           String   @id
+  userId       String
+  objectId     String
+  districtId   String
+  latitude     Float
+  longitude    Float
+  imageUrl     String
+  aiConfidence Float?
+  rarityScore  Float
+  verified     Boolean  @default(false)
+  discoveredAt DateTime @default(now())
+  District     District @relation(fields: [districtId], references: [id])
+  Object       Object   @relation(fields: [objectId], references: [id])
+  User         User     @relation(fields: [userId], references: [id])
+
+  @@index([districtId])
+  @@index([objectId])
+  @@index([userId])
+}
+
+model District {
+  id                   String                 @id
+  country              String
+  state                String
+  district             String
+  totalDiscoveries     Int                    @default(0)
+  Discovery            Discovery[]
+  DistrictObjectRarity DistrictObjectRarity[]
+
+  @@unique([country, state, district])
+}
+
+model DistrictObjectRarity {
+  id             String   @id
+  districtId     String
+  objectId       String
+  discoveryCount Int      @default(0)
+  District       District @relation(fields: [districtId], references: [id])
+  Object         Object   @relation(fields: [objectId], references: [id])
+
+  @@unique([districtId, objectId])
+}
+
+model Object {
+  id                   String                 @id
+  category             String
+  commonName           String
+  description          String?
+  verified             Boolean                @default(false)
+  createdByAI          Boolean                @default(true)
+  totalDiscoveries     Int                    @default(0)
+  createdAt            DateTime               @default(now())
+  Discovery            Discovery[]
+  DistrictObjectRarity DistrictObjectRarity[]
+}
+
+model User {
+  id               String      @id
+  email            String      @unique
+  aiCredits        Int         @default(5)
+  avgRarityScore   Float       @default(0)
+  isPremium        Boolean     @default(false)
+  joinedAt         DateTime    @default(now())
+  level            Int         @default(1)
+  photoUrl         String?
+  rareDiscoveries  Int         @default(0)
+  totalDiscoveries Int         @default(0)
+  username         String
+  xp               Int         @default(0)
+  name             String
+  password         String
+  AIScan           AIScan[]
+  Discovery        Discovery[]
+
+  @@index([username])
+}
