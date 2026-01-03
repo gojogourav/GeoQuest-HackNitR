@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "699235246168",
+    "project_id": "geoquest-f35a6",
+    "storage_bucket": "geoquest-f35a6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:699235246168:android:013da01ace95e8a0e92a2d",
+        "android_client_info": {
+          "package_name": "com.example.frontend"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "699235246168-hcgbv10k16sahq5k85oql1u36d8bcco6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmqvNXoRCzOl3IS4wxSk0sWaa-sFb380M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "699235246168-hcgbv10k16sahq5k85oql1u36d8bcco6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
