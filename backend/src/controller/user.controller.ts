@@ -10,8 +10,8 @@ export const getMyGarden = asyncHandler(async (req: Request, res: Response) => {
     include: {
       plant: {
         include: {
-          object: true, // To get the Plant Name (commonName)
-          tasks: {      // To get the "To-Do List"
+          object: true, 
+          tasks: {      
             where: {
                 nextDueAt: { lte: new Date() } 
             }
@@ -27,7 +27,7 @@ export const getMyGarden = asyncHandler(async (req: Request, res: Response) => {
     name: item.plant.object.commonName,
     health: item.plant.healthScore,
     streak: item.currentStreak,
-    tasks_due: item.plant.tasks // The frontend can loop this list to show buttons
+    tasks_due: item.plant.tasks 
   }));
 
   res.json({ garden: formattedGarden });

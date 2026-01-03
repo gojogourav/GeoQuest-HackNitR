@@ -9,7 +9,6 @@ export const getWeatherContext = async (lat: number, lon: number) => {
     const response = await axios.get(url);
     const data = response.data;
 
-    // Return a readable string for the AI
     return `Temperature: ${data.main.temp}°C, Condition: ${data.weather[0].description}, Humidity: ${data.main.humidity}%`;
   } catch (error) {
     console.error("Weather API Error:", error);
