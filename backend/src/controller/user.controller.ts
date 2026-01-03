@@ -33,6 +33,41 @@ export const getMyGarden = asyncHandler(async (req: Request, res: Response) => {
   res.json({ garden: formattedGarden });
 });
 
+export const getMyProfile = asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user?.uid;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      _count: {
+        select: { discoveries: true, caretakerProfiles: true }
+      }
+    }
+  });
+
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  const rankCount = await prisma.user.count({
+    where: { xp: { gt: user.xp } }
+  });
+  const myRank = rankCount + 1;
+
+  res.json({
+    user: {
+      username: user.username,
+      photoUrl: user.photoUrl,
+      level: user.level,
+      xp: user.xp,
+      joinedAt: user.joinedAt,
+      rank: myRank,
+      stats: {
+        total_discoveries: user._count.discoveries,
+        plants_adopted: user._count.caretakerProfiles,
+      }
+    }
+  });
+});
+
 export const getLeaderboard = asyncHandler(async (req: Request, res: Response) => {
   // Simple Top 10 by XP
   const leaders = await prisma.user.findMany({

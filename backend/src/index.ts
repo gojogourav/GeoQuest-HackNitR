@@ -1,28 +1,47 @@
-import express,{ Express } from "express";
-import cors from "cors"
+import express, { Express } from "express";
+import cors from "cors";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env";
-const app:Express = express();
+import AuthRouter from "./routes/auth.routes";
+import discoveryRouter from "./routes/discover.routes";
+import dailyCareRouter from "./routes/dailyCare.routes";
+import { errorHandler } from "./middleware/error.middleware";
+
+const app: Express = express();
 
 const PORT = env.PORT;
 
-app.use(cors({origin:true,credentials:true}));
+// Middleware
+app.use(
+  cors({
+    origin: true, // TODO: restricting this to the frontend URL in production is better security
+    credentials: true,
+  })
+);
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-
-app.get("/health", (_, res) => {
-  res.json({ status: "ok" });
-});
-
+// Logging Middleware
 app.use((req, res, next) => {
   console.log(`Incoming Request: ${req.method} ${req.url}`);
-  next(); // Pass control to the next handler
+  next();
 });
 
+// Health Check
+app.get("/health", (_, res) => {
+  res.json({ status: "ok", timestamp: new Date() });
+});
 
-app.listen(PORT,()=>{
-    console.log(`Server starting at - http://localhost:${PORT}`);
-    
-})
+// Routes
+app.use("/api/auth", AuthRouter);
+app.use("/api/discover", discoveryRouter);
+app.use("/api/care", dailyCareRouter);
+
+// Error Handling (Must be last)
+app.use(errorHandler);
+
+app.listen(PORT, () => {
+  console.log(`Server starting at - http://localhost:${PORT}`);
+});
 

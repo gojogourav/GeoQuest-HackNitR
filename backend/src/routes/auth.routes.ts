@@ -1,13 +1,12 @@
-import express, { Request, Response, Router } from "express";
+import express, { Router } from "express";
 import { loginController, registerController } from "../controller/auth.controller";
+import { verifyToken } from "../middleware/auth.middleware";
 
+const AuthRouter: Router = express.Router();
 
-const AuthRouter:Router = express.Router();
-
-AuthRouter.route("/login").post(loginController);
-
-
-AuthRouter.route("/login").post(registerController);
-
+// Both login and register require the user to be authenticated with Firebase first
+// to extract the UID and email from the token.
+AuthRouter.route("/login").post(verifyToken, loginController);
+AuthRouter.route("/register").post(verifyToken, registerController);
 
 export default AuthRouter;
