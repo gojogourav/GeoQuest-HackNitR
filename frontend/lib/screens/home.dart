@@ -13,11 +13,7 @@ import 'package:frontend/screens/authScreen.dart';
 import 'package:frontend/screens/cameraScreen.dart';
 import 'package:frontend/screens/imagePreviewScreen.dart';
 import 'package:frontend/screens/storedImageScreen.dart';
-<<<<<<< HEAD
 import 'package:frontend/screens/leader.dart';
-=======
-import 'package:frontend/screens/userDetailScreen.dart';
->>>>>>> a46a75c3737bf95e99f261f492704cb8a36f796d
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -132,32 +128,37 @@ class _HomeScreenState extends State<HomeScreen> {
       final Paint paint = Paint()
         ..color = Colors.white
         ..style = PaintingStyle.fill;
-      
+
       canvas.drawCircle(Offset(radius, radius), radius, paint);
 
       // Draw Image in circle
       final Path clipPath = Path()
-        ..addOval(Rect.fromCircle(center: Offset(radius, radius), radius: radius - 8)); // 8 is border width
-      
+        ..addOval(
+          Rect.fromCircle(center: Offset(radius, radius), radius: radius - 8),
+        ); // 8 is border width
+
       canvas.clipPath(clipPath);
 
       // Scale image to fit
-      final double imageSize = size; // Assuming square for simplicity or handled by codec
+      final double imageSize =
+          size; // Assuming square for simplicity or handled by codec
       canvas.drawImageRect(
-        image, 
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()), 
-        Rect.fromLTWH(0, 0, imageSize, imageSize), 
-        Paint()
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        Rect.fromLTWH(0, 0, imageSize, imageSize),
+        Paint(),
       );
 
       final ui.Picture picture = pictureRecorder.endRecording();
       final ui.Image img = await picture.toImage(size.toInt(), size.toInt());
-      final ByteData? byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+      final ByteData? byteData = await img.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
 
-      if (byteData == null) return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+      if (byteData == null)
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
 
       return BitmapDescriptor.fromBytes(byteData.buffer.asUint8List());
-
     } catch (e) {
       print("Error creating marker: $e");
       return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
@@ -169,18 +170,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('discoveries') ?? [];
     _discoveries = list.map((e) => Discovery.fromJson(json.decode(e))).toList();
-    
+
     _markers = {};
 
     for (var d in _discoveries) {
-      // Quality Control: Filter out low confidence scans
-      // Default to 1.0 (show it) if confidence is missing (legacy data or not yet analyzed)
-      final double confidence = (d.plantData['confidence'] is num) 
-          ? (d.plantData['confidence'] as num).toDouble() 
-          : 1.0;
-
-      if (confidence < 0.5) continue;
-
       final icon = await _createCustomMarkerBitmap(d.imagePath);
       _markers.add(
         Marker(
@@ -191,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                 builder: (_) => ImagePreviewScreen(imagePath: d.imagePath),
+                builder: (_) => ImagePreviewScreen(imagePath: d.imagePath),
               ),
             );
           },
@@ -602,24 +595,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Expanded(
                             child: _actionTile(
-<<<<<<< HEAD
                               icon: Icons.leaderboard,
                               label: "Leaderboard",
-=======
-                              icon: Icons.person_pin,
-                              label: "Profile",
->>>>>>> a46a75c3737bf95e99f261f492704cb8a36f796d
                               color: Colors.orange,
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-<<<<<<< HEAD
                                     builder: (context) =>
                                         const LeaderboardPage(),
-=======
-                                    builder: (_) => const UserDetailScreen(),
->>>>>>> a46a75c3737bf95e99f261f492704cb8a36f796d
                                   ),
                                 );
                               },

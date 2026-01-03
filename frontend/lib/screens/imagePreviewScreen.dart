@@ -518,6 +518,34 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
                     ),
                   ),
 
+                  // --- AUTHENTICITY CHECK UI ---
+                  if (plantData!["imageSourceConfidence"] != null)
+                    _card(
+                      "Image Source Check",
+                      Icons.camera_enhance,
+                      Column(
+                        children: [
+                          _authenticityBar(
+                            "Real Plant",
+                            "Likelihood it's a direct photo",
+                            (plantData!["imageSourceConfidence"]["realPlant"] ??
+                                    0.0)
+                                .toDouble(),
+                            Colors.lightGreenAccent,
+                          ),
+                          const SizedBox(height: 16),
+                          _authenticityBar(
+                            "Screen / Digital Display",
+                            "Likelihood it's a photo of a screen",
+                            (plantData!["imageSourceConfidence"]["screenOrPhoto"] ??
+                                    0.0)
+                                .toDouble(),
+                            Colors.redAccent,
+                          ),
+                        ],
+                      ),
+                    ),
+
                   if (plantData!["health"] != null)
                     _card(
                       "Health Status",

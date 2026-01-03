@@ -42,6 +42,7 @@ export const AnalyzeAndUpload = asyncHandler(
         4. IMAGE SOURCE CHECK: Determine if this image is a direct photo of a real plant OR a photo of a screen/digital display/photo.
         
         CRITICAL RULES:
+        - strictly analyze the image and determine if it is a direct photo of a real plant OR a photo of a screen/digital display/photo.
         - If the image looks like it was taken from a screen, monitor, or is a photo of another photo:
           -> SET "confidence" to < 0.4 (PENALIZE HEAVILY).
           -> Set "imageSourceConfidence.realPlant" to < 0.2.
@@ -115,6 +116,33 @@ export const AnalyzeAndUpload = asyncHandler(
       create: { id: districtId, country, state, district },
       update: {}
     });
+
+    // Validating User Existence (Self-Healing)
+    let userExists = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userExists) {
+      console.log(` User ${userId} not found. Creating fallback profile...`);
+      const email = (req as any).user?.email;
+      const emailPrefix = email ? email.split("@")[0] : "explorer";
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+
+      try {
+        userExists = await prisma.user.create({
+          data: {
+            id: userId,
+            email: email || `unknown_${userId}@geoquest.com`,
+            username: `${emailPrefix}_${randomSuffix}`,
+            name: emailPrefix,
+            joinedAt: new Date(),
+          }
+        });
+      } catch (err) {
+        // Handle race condition where user might be created in parallel
+        console.error("Error creating fallback user:", err);
+        // Try fetching again to be safe
+        userExists = await prisma.user.findUnique({ where: { id: userId } });
+        if (!userExists) return res.status(500).json({ error: "User synchronization failed." });
+      }
+    }
 
     const dbResult = await prisma.$transaction(async (tx) => {
       // A. Find/Create Species
