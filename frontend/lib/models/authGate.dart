@@ -47,50 +47,72 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 80),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              //SizedBox(height: 100, child: Image.asset("images/logo.png")),
-              SizedBox(height: 20),
-              LinearProgressIndicator(
-                backgroundColor: const Color.fromARGB(255, 37, 37, 37),
-                color: const Color.fromARGB(255, 0, 25, 65), // progress color
-                minHeight: 8, // thickness
-                borderRadius: BorderRadius.circular(
-                  10,
-                ), // round edges (Flutter 3.7+)
+      // backgroundColor: const Color.fromARGB(255, 2, 58, 18),
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color.fromARGB(255, 3, 21, 8),
+                  Color.fromARGB(255, 1, 6, 3),
+                ],
+                stops: const [0.0, 1.0],
               ),
-
-              SizedBox(height: 20),
-              Column(
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 80),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    "GeoQuest",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 24,
-                      letterSpacing: 1.5,
-                      color: Colors.white,
-                    ),
+                  SizedBox(height: 20),
+                  Column(
+                    children: [
+                      const Text(
+                        "GeoQuest",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 24,
+                          letterSpacing: 1.5,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const Text(
+                        "Explore the world",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                          letterSpacing: 1.5,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
                   ),
-                  const Text(
-                    "Explore the world",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10,
-                      letterSpacing: 1.5,
-                      color: Colors.white70,
-                    ),
+                  SizedBox(height: 20),
+                  LinearProgressIndicator(
+                    backgroundColor: const Color.fromARGB(255, 37, 37, 37),
+                    color: const Color.fromARGB(
+                      255,
+                      6,
+                      175,
+                      37,
+                    ), // progress color
+                    minHeight: 8, // thickness
+                    borderRadius: BorderRadius.circular(
+                      10,
+                    ), // round edges (Flutter 3.7+)
                   ),
+
+                  SizedBox(height: 20),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

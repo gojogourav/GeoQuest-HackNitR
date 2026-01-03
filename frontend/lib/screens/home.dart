@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:frontend/auth_service.dart';
+import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/models/discovery.dart';
 import 'package:frontend/screens/authScreen.dart';
 import 'package:frontend/screens/cameraScreen.dart';
