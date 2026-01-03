@@ -39,6 +39,15 @@ export const AnalyzeAndUpload = asyncHandler(
         1. Identify the plant.
         2. Assess Health (0-100 score).
         3. Generate a "Habit Schedule" (Quests) for the user to follow.
+        4. IMAGE SOURCE CHECK: Determine if this image is a direct photo of a real plant OR a photo of a screen/digital display/photo.
+        
+        CRITICAL RULES:
+        - If the image looks like it was taken from a screen, monitor, or is a photo of another photo:
+          -> SET "confidence" to < 0.4 (PENALIZE HEAVILY).
+          -> Set "imageSourceConfidence.realPlant" to < 0.2.
+          -> Set "imageSourceConfidence.screenOrPhoto" to > 0.8.
+        - If it is a real, direct photo of a plant:
+          -> "confidence" can be high.
         
         Return JSON exactly:
         {
