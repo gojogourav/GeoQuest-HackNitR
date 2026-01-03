@@ -34,7 +34,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-      
+
       final token = await user.getIdToken();
       if (token == null) return;
 
@@ -47,7 +47,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
 
       final mappedDiscoveries = discoveriesList.map((d) {
         return Discovery(
-          imagePath: d['imageUrl'] ?? "", 
+          imagePath: d['imageUrl'] ?? "",
           lat: (d['latitude'] as num?)?.toDouble() ?? 0.0,
           lng: (d['longitude'] as num?)?.toDouble() ?? 0.0,
           plantData: {
@@ -56,8 +56,8 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
             "scientificName": d['object']?['scientificName'],
             "description": d['object']?['description'],
             "health": {
-              "score": d['healthScore'] ?? 0, 
-              "status": "Check Details"
+              "score": d['healthScore'] ?? 0,
+              "status": "Check Details",
             },
             "confidence": d['confidence'] ?? 1.0,
             // Rarity is complex to reconstruct from this endpoint, leaving null is safe now
@@ -68,7 +68,8 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
       if (mounted) {
         setState(() {
           if (profileData != null) {
-            userName = profileData['username'] ?? user.displayName ?? "Explorer";
+            userName =
+                profileData['username'] ?? user.displayName ?? "Explorer";
             userXp = profileData['xp'] ?? 0;
             userLevel = profileData['level'] ?? 1;
             userPhoto = user.photoURL;
@@ -90,82 +91,94 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         children: [
           // Background Gradient (Fixed behind scroll)
           Positioned.fill(
-             child: Container(
+            child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+                  colors: [
+                    Color(0xFF0F2027),
+                    Color(0xFF203A43),
+                    Color(0xFF2C5364),
+                  ],
                 ),
               ),
             ),
           ),
-          
-          isLoading 
-            ? const Center(child: CircularProgressIndicator(color: Colors.greenAccent))
-            : CustomScrollView(
-            slivers: [
-              // 1. Profile + Stats Header
-              SliverToBoxAdapter(
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 20), 
-                        _buildProfileHeader(),
-                        const SizedBox(height: 30),
-                        _buildStatsRow(),
-                        const SizedBox(height: 30),
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            "Your Garden",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
 
-              // 2. Plant Grid (StoredImageScreen Style)
-              discoveries.isEmpty
-                ? SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 100),
-                        child: Text(
-                          "No plants found yet.\nStart scanning!",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white.withOpacity(0.5)),
+          isLoading
+              ? const Center(
+                  child: CircularProgressIndicator(color: Colors.greenAccent),
+                )
+              : CustomScrollView(
+                  slivers: [
+                    // 1. Profile + Stats Header
+                    SliverToBoxAdapter(
+                      child: SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
+                          child: Column(
+                            children: [
+                              const SizedBox(height: 20),
+                              _buildProfileHeader(),
+                              const SizedBox(height: 30),
+                              _buildStatsRow(),
+                              const SizedBox(height: 30),
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  "Your Garden",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  )
-                : SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                  sliver: SliverGrid(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final discovery = discoveries[index];
-                      return _buildPlantCard(discovery);
-                    }, childCount: discoveries.length),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 0.9,
-                    ),
-                  ),
+
+                    // 2. Plant Grid (StoredImageScreen Style)
+                    discoveries.isEmpty
+                        ? SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 100),
+                                child: Text(
+                                  "No plants found yet.\nStart scanning!",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.5),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                            sliver: SliverGrid(
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                final discovery = discoveries[index];
+                                return _buildPlantCard(discovery);
+                              }, childCount: discoveries.length),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                    childAspectRatio: 0.9,
+                                  ),
+                            ),
+                          ),
+                  ],
                 ),
-            ],
-          ),
 
           // Custom Back Button (Overlay)
           Positioned(
@@ -180,7 +193,11 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white24),
                 ),
-                child: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+                child: const Icon(
+                  Icons.arrow_back_ios_new,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
             ),
           ),
@@ -202,14 +219,16 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                 color: Colors.greenAccent.withOpacity(0.3),
                 blurRadius: 20,
                 spreadRadius: 2,
-              )
+              ),
             ],
           ),
           child: CircleAvatar(
             radius: 50,
             backgroundColor: Colors.grey[800],
-            backgroundImage: userPhoto != null ? NetworkImage(userPhoto!) : null,
-            child: userPhoto == null 
+            backgroundImage: userPhoto != null
+                ? NetworkImage(userPhoto!)
+                : null,
+            child: userPhoto == null
                 ? const Icon(Icons.person, size: 50, color: Colors.white)
                 : null,
           ),
@@ -257,13 +276,23 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
         children: [
           _buildStatItem("Total XP", "$userXp", Icons.bolt, Colors.orange),
           Container(width: 1, height: 40, color: Colors.white24),
-          _buildStatItem("Plants", "${discoveries.length}", Icons.local_florist, Colors.green),
+          _buildStatItem(
+            "Plants",
+            "${discoveries.length}",
+            Icons.local_florist,
+            Colors.green,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon, Color color) {
+  Widget _buildStatItem(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Column(
       children: [
         Icon(icon, color: color, size: 28),
@@ -296,7 +325,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
 
     // Isolate Health logic if needed, but StoredImageScreen is just an image.
     // We will keep the image focus but add a small overlay for context.
-    
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -317,7 +346,9 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2), // Darker shadow for dark bg
+                color: Colors.black.withOpacity(
+                  0.2,
+                ), // Darker shadow for dark bg
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -328,26 +359,34 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                (discovery.imagePath.startsWith("http")) 
-                ? Image.network(discovery.imagePath, fit: BoxFit.cover) 
-                : Image.file(File(discovery.imagePath), fit: BoxFit.cover),
-                
+                (discovery.imagePath.startsWith("http"))
+                    ? Image.network(discovery.imagePath, fit: BoxFit.cover)
+                    : Image.file(File(discovery.imagePath), fit: BoxFit.cover),
+
                 // Subtle Gradient Overlay for Text Visibility
                 Positioned(
-                  bottom: 0, left: 0, right: 0,
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
                   child: Container(
                     height: 50,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.8),
+                        ],
                       ),
                     ),
                   ),
                 ),
 
                 Positioned(
-                  bottom: 10, left: 12, right: 12,
+                  bottom: 10,
+                  left: 12,
+                  right: 12,
                   child: Text(
                     displayName,
                     maxLines: 1,

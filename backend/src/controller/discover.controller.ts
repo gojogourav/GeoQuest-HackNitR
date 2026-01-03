@@ -206,6 +206,7 @@ export const AnalyzeAndUpload = asyncHandler(
           latitude: parseFloat(latitude),
           longitude: parseFloat(longitude),
           imageUrl: uploadResult.url,
+          aiConfidence: aiResult.confidence,
           rarityScore: finalMultiplier,
           verified: true
         }
@@ -307,6 +308,7 @@ export const getUserDiscoveries = asyncHandler(
       orderBy: { discoveredAt: 'desc' },
       include: {
         object: true,
+        plant: true,
         district: {
           select: { district: true }
         }

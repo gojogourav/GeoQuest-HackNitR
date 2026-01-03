@@ -6,15 +6,17 @@ class ApiService {
   // Use 10.0.2.2 for Android Emulator, localhost for iOS/Web
   static String get baseUrl {
     if (Platform.isAndroid) {
-       // If using 'adb reverse tcp:3000 tcp:3000', use localhost/127.0.0.1
-       // If standard emulator without reverse, 10.0.2.2 is needed.
-       // We can try to prefer localhost if we assume adb reverse is active.
-       return "http://127.0.0.1:3000/api";
+      // If using 'adb reverse tcp:3000 tcp:3000', use localhost/127.0.0.1
+      // If standard emulator without reverse, 10.0.2.2 is needed.
+      // We can try to prefer localhost if we assume adb reverse is active.
+      return "http://10.0.2.2:3000/api";
     }
     return "http://localhost:3000/api";
   }
 
-  static Future<Map<String, dynamic>?> syncUserWithBackend(String firebaseToken) async {
+  static Future<Map<String, dynamic>?> syncUserWithBackend(
+    String firebaseToken,
+  ) async {
     try {
       final url = Uri.parse('$baseUrl/auth/login');
       print("🔌 Syncing with Backend: $url");
@@ -32,7 +34,9 @@ class ApiService {
         final jsonResponse = json.decode(response.body);
         return jsonResponse['data'];
       } else {
-        print("❌ Backend Sync Failed (${response.statusCode}): ${response.body}");
+        print(
+          "❌ Backend Sync Failed (${response.statusCode}): ${response.body}",
+        );
         return null;
       }
     } catch (e) {
@@ -42,38 +46,43 @@ class ApiService {
   }
 
   static Future<http.Response> scanPlant(
-      String imagePath,
-      String firebaseToken, {
-      required double latitude,
-      required double longitude,
-      String? district,
-      String? state,
-      String? country,
+    String imagePath,
+    String firebaseToken, {
+    required double latitude,
+    required double longitude,
+    String? district,
+    String? state,
+    String? country,
   }) async {
     final uri = Uri.parse("$baseUrl/discover/scan");
-    
+
     // Read file and convert to Base64
     final bytes = await File(imagePath).readAsBytes();
     final base64Image = base64Encode(bytes);
 
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $firebaseToken',
-      },
-      body: jsonEncode({
-        'image': base64Image,
-        'latitude': latitude,
-        'longitude': longitude,
-        'district': district,
-        'state': state,
-        'country': country,
-      }),
-    ).timeout(const Duration(seconds: 60)); // Increased timeout for large payload
+    final response = await http
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $firebaseToken',
+          },
+          body: jsonEncode({
+            'image': base64Image,
+            'latitude': latitude,
+            'longitude': longitude,
+            'district': district,
+            'state': state,
+            'country': country,
+          }),
+        )
+        .timeout(
+          const Duration(seconds: 60),
+        ); // Increased timeout for large payload
 
     return response;
   }
+
   static Future<List<dynamic>> getUserDiscoveries(String firebaseToken) async {
     try {
       final url = Uri.parse('$baseUrl/discover/my-discoveries');
@@ -89,7 +98,9 @@ class ApiService {
         final jsonResponse = json.decode(response.body);
         return jsonResponse['data'] ?? [];
       } else {
-        print("❌ Fetch Discoveries Failed (${response.statusCode}): ${response.body}");
+        print(
+          "❌ Fetch Discoveries Failed (${response.statusCode}): ${response.body}",
+        );
         return [];
       }
     } catch (e) {
