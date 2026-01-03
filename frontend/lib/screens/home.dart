@@ -1,8 +1,10 @@
 // ignore_for_file: unused_element, unused_field, unused_local_variable
 
-import 'dart:convert';
+import 'dart:convert' hide Codec;
 import 'dart:async';
-import 'dart:ui';
+import 'dart:ui' as ui;
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:frontend/services/auth_service.dart';
@@ -99,27 +101,91 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {}
   }
 
+  // Create custom marker with image
+  Future<BitmapDescriptor> _createCustomMarkerBitmap(String imagePath) async {
+    try {
+      final File imageFile = File(imagePath);
+      if (!await imageFile.exists()) {
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+      }
+
+      final Uint8List imageBytes = await imageFile.readAsBytes();
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        imageBytes,
+        targetWidth: 150,
+        targetHeight: 150,
+      );
+      final ui.FrameInfo frameInfo = await codec.getNextFrame();
+      final ui.Image image = frameInfo.image;
+
+      final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+      final Canvas canvas = Canvas(pictureRecorder);
+      final double size = 150.0;
+      final double radius = size / 2;
+
+      // Draw circle background/border
+      final Paint paint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill;
+      
+      canvas.drawCircle(Offset(radius, radius), radius, paint);
+
+      // Draw Image in circle
+      final Path clipPath = Path()
+        ..addOval(Rect.fromCircle(center: Offset(radius, radius), radius: radius - 8)); // 8 is border width
+      
+      canvas.clipPath(clipPath);
+
+      // Scale image to fit
+      final double imageSize = size; // Assuming square for simplicity or handled by codec
+      canvas.drawImageRect(
+        image, 
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()), 
+        Rect.fromLTWH(0, 0, imageSize, imageSize), 
+        Paint()
+      );
+
+      final ui.Picture picture = pictureRecorder.endRecording();
+      final ui.Image img = await picture.toImage(size.toInt(), size.toInt());
+      final ByteData? byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+      if (byteData == null) return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+
+      return BitmapDescriptor.fromBytes(byteData.buffer.asUint8List());
+
+    } catch (e) {
+      print("Error creating marker: $e");
+      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+    }
+  }
+
   // load discoveries
   Future<void> loadDiscoveries() async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList('discoveries') ?? [];
     _discoveries = list.map((e) => Discovery.fromJson(json.decode(e))).toList();
+    
+    _markers = {};
 
-    _markers = _discoveries.map((d) {
-      return Marker(
-        markerId: MarkerId(d.imagePath),
-        position: LatLng(d.lat, d.lng),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ImagePreviewScreen(imagePath: d.imagePath),
-            ),
-          );
-        },
+    for (var d in _discoveries) {
+      final icon = await _createCustomMarkerBitmap(d.imagePath);
+      _markers.add(
+        Marker(
+          markerId: MarkerId(d.imagePath),
+          position: LatLng(d.lat, d.lng),
+          icon: icon,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                 builder: (_) => ImagePreviewScreen(imagePath: d.imagePath),
+              ),
+            );
+          },
+        ),
       );
-    }).toSet();
+    }
+
     setState(() {});
   }
 
@@ -296,7 +362,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // child: ClipRRect(
           //   borderRadius: BorderRadius.circular(34),
           //   child: BackdropFilter(
-          //     filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          //     filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           //     child: Container(
           //       padding: const EdgeInsets.symmetric(
           //         horizontal: 22,
@@ -340,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen> {
           //     onTap: _goToCurrentLocation, // optional
           //     child: ClipOval(
           //       child: BackdropFilter(
-          //         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          //         filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           //         child: Container(
           //           width: 42,
           //           height: 42,
@@ -415,7 +481,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(34),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 22,
@@ -464,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(28),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
                 child: Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
@@ -636,7 +702,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(26),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
           child: Container(
             height: height,
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
