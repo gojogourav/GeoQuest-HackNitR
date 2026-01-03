@@ -1,4 +1,3 @@
-// ignore_for_file: depend_on_referenced_packages
 
 import 'dart:convert';
 import 'dart:io';
@@ -7,6 +6,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:frontend/services/api.service.dart';
+import 'package:geolocator/geolocator.dart';
 
 class ImagePreviewScreen extends StatefulWidget {
   final String imagePath;
@@ -20,6 +22,7 @@ class ImagePreviewScreen extends StatefulWidget {
 class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
   Map<String, dynamic>? plantData;
   bool isLoading = true;
+  String loadingMessage = "Initializing Scan...";
   bool hasError = false;
   String errorMessage = "";
 
@@ -49,26 +52,85 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
   // generate data
   Future<bool> _generateAndSave() async {
     try {
-      final uri = Uri.parse("http://localhost:3000/scan");
-      final request = http.MultipartRequest("POST", uri);
-
-      request.files.add(
-        await http.MultipartFile.fromPath("photo", widget.imagePath),
-      );
-
-      request.fields['latitude'] = "20.2961";
-      request.fields['longitude'] = "85.8245";
-
-      final response = await request.send().timeout(
-        const Duration(seconds: 35),
-      );
-      final responseBody = await response.stream.bytesToString();
-
-      if (response.statusCode != 200) {
-        throw Exception(responseBody);
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception("User not logged in");
+      }
+      final token = await user.getIdToken();
+      if (token == null) {
+        throw Exception("Failed to retrieve auth token");
       }
 
-      final jsonResponse = json.decode(responseBody);
+      // --- Location & Geocoding ---
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+           throw Exception("Location permissions are denied");
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception("Location permissions are permanently denied");
+      }
+
+      final Position position = await Geolocator.getCurrentPosition();
+      
+
+
+
+      String? district;
+      String? state;
+      String? country;
+
+      try {
+        setState(() {
+          loadingMessage = "Detecting Location...";
+        });
+
+        final place = await _getPlaceFromCoordinates(position.latitude, position.longitude);
+        district = place["district"];
+        state = place["state"];
+        country = place["country"];
+
+        if (state != null) {
+           print("📍 Geocoding Success: District: $district, State: $state, Country: $country");
+           setState(() {
+            loadingMessage = "Scanning from ${district ?? ""}, $state...";
+          });
+        }
+      } catch (e) {
+        print("Geocoding logic error: $e");
+      }
+
+      final response = await ApiService.scanPlant(
+        widget.imagePath, 
+        token,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        district: district,
+        state: state,
+        country: country
+      );
+
+      if (response.statusCode == 400) {
+         try {
+           final errJson = json.decode(response.body);
+           if (errJson['error'] == "Not a plant") {
+             throw Exception("NOT_A_PLANT");
+           }
+           throw Exception(errJson['error'] ?? "Unknown Error");
+         } catch (e) {
+           if (e.toString().contains("NOT_A_PLANT")) rethrow;
+           throw Exception("Analysis Failed: ${response.statusCode}");
+         }
+      }
+
+      if (response.statusCode != 200) {
+        throw Exception(response.body);
+      }
+
+      final jsonResponse = json.decode(response.body);
       final data = jsonResponse['plant_data'];
 
       final prefs = await SharedPreferences.getInstance();
@@ -82,9 +144,10 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
 
       return true;
     } catch (e) {
-      errorMessage = e.toString();
+      errorMessage = e.toString().replaceAll("Exception: ", "");
       hasError = true;
       isLoading = false;
+      setState(() {});
       return false;
     }
   }
@@ -94,6 +157,7 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
     setState(() {
       isLoading = true;
       hasError = false;
+      errorMessage = "";
     });
     await _generateAndSave();
   }
@@ -244,8 +308,19 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
 
           SafeArea(
             child: isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Colors.green),
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const CircularProgressIndicator(color: Colors.green),
+                        const SizedBox(height: 16),
+                        Text(
+                           loadingMessage,
+                           style: const TextStyle(color: Colors.white70, fontSize: 16),
+                           textAlign: TextAlign.center,
+                        )
+                      ],
+                    ),
                   )
                 : hasError || plantData == null
                 ? _errorView()
@@ -255,6 +330,97 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
       ),
     );
   }
+
+  // -------------------- CONTENT --------------------
+  // ... (content sheet remains same)
+
+  // ... (helper methods remain same)
+
+  Widget _errorView() {
+    bool isNotPlant = errorMessage.contains("NOT_A_PLANT");
+
+    if (isNotPlant) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+               Container(
+                 padding: const EdgeInsets.all(24),
+                 decoration: BoxDecoration(
+                   color: Colors.redAccent.withOpacity(0.1),
+                   shape: BoxShape.circle,
+                   border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 2)
+                 ),
+                 child: const Icon(Icons.nature_outlined, color: Colors.redAccent, size: 64),
+               ),
+               const SizedBox(height: 24),
+               const Text(
+                 "Not a Plant?",
+                 style: TextStyle(
+                   color: Colors.white,
+                   fontSize: 24,
+                   fontWeight: FontWeight.bold,
+                   letterSpacing: 1.1
+                 ),
+               ),
+               const SizedBox(height: 12),
+               const Text(
+                 "Our scanners couldn't find a plant in this image. \nTry getting closer or using better lighting.",
+                 textAlign: TextAlign.center,
+                 style: TextStyle(color: Colors.white70, fontSize: 16, height: 1.5),
+               ),
+               const SizedBox(height: 32),
+               SizedBox(
+                 width: double.infinity,
+                 child: ElevatedButton.icon(
+                   style: ElevatedButton.styleFrom(
+                     backgroundColor: Colors.white,
+                     foregroundColor: Colors.black,
+                     padding: const EdgeInsets.symmetric(vertical: 16),
+                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                   ),
+                   onPressed: retryAnalysis,
+                   icon: const Icon(Icons.refresh),
+                   label: const Text("Try Again", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                 ),
+               )
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.orangeAccent, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              "Analysis Failed",
+              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage.isNotEmpty ? errorMessage : "Unknown error occurred",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white54),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: retryAnalysis,
+              child: const Text("Retry"),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
 
   // -------------------- CONTENT --------------------
   Widget _contentSheet() {
@@ -272,7 +438,7 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
                 controller: controller,
                 padding: const EdgeInsets.fromLTRB(22, 22, 22, 90),
                 children: [
-                  Center(
+                   Center(
                     child: Container(
                       width: 46,
                       height: 5,
@@ -284,42 +450,77 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
                   ),
                   const SizedBox(height: 20),
 
+                  // Title Section
+                  Text(
+                    plantData!["commonName"] ?? "Unknown Plant",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    plantData!["scientificName"] ?? "",
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
                   _card(
                     "Identification Confidence",
                     Icons.verified,
                     _confidenceBar(
                       "Accuracy",
-                      plantData!["confidence"].toDouble(),
+                      (plantData!["confidence"] ?? 0.0).toDouble(),
                       Colors.greenAccent,
                     ),
                   ),
 
+                  if (plantData!["health"] != null)
                   _card(
-                    "Image Authenticity",
-                    Icons.image,
+                    "Health Status",
+                    Icons.healing,
                     Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _authenticityBar(
-                          "Real Plant",
-                          "Photo of a real plant",
-                          plantData!["imageSourceConfidence"]["realPlant"]
-                              .toDouble(),
-                          Colors.greenAccent,
+                        Row(
+                          children: [
+                             Text(
+                              plantData!["health"]["status"] ?? "UNKNOWN",
+                              style: TextStyle(
+                                color: _getHealthColor(plantData!["health"]["status"]),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                             ),
+                             const Spacer(),
+                             Text(
+                               "${plantData!["health"]["score"] ?? 0}%",
+                               style: const TextStyle(color: Colors.white70),
+                             ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        _authenticityBar(
-                          "Screen / Image",
-                          "Possibly taken from screen",
-                          plantData!["imageSourceConfidence"]["screenOrPhoto"]
-                              .toDouble(),
-                          Colors.orangeAccent,
+                        const SizedBox(height: 8),
+                         LinearProgressIndicator(
+                          value: (plantData!["health"]["score"] ?? 0) / 100.0,
+                          minHeight: 8,
+                          backgroundColor: Colors.white24,
+                          valueColor: AlwaysStoppedAnimation(_getHealthColor(plantData!["health"]["status"])),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          plantData!["health"]["diagnosis"] ?? "",
+                          style: const TextStyle(color: Colors.white70),
                         ),
                       ],
                     ),
                   ),
 
-                  _card(
-                    "About",
+                   _card(
+                    "Description",
                     Icons.info_outline,
                     Text(
                       plantData!["description"] ?? "",
@@ -333,18 +534,66 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
                   _card(
                     "Rarity",
                     Icons.public,
-                    Text(
-                      plantData!["rarity"]["note"] ?? "",
-                      style: const TextStyle(color: Colors.white70),
-                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                         _buildInfoRow(Icons.stars, "Level", plantData!["rarity"]["level"] ?? "Unknown"),
+                         _buildInfoRow(Icons.place, "Locality", plantData!["rarity"]["locality"] ?? "Unknown"),
+                      ],
+                    )
                   ),
 
+                  if (plantData!["careSchedule"] != null)
                   _card(
-                    "Growing Tips",
-                    Icons.spa,
-                    Text(
-                      plantData!["growingTips"]["easyCareTips"] ?? "",
-                      style: const TextStyle(color: Colors.white70),
+                    "Care Schedule",
+                    Icons.calendar_month,
+                    Column(
+                      children: (plantData!["careSchedule"] as List).map((task) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white10,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(_getActionIcon(task["action"]), color: Colors.greenAccent, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      task["taskName"] ?? "",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      "${task["difficulty"]} • ${task["timeOfDay"]}",
+                                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                    ),
+                                     const SizedBox(height: 4),
+                                    Text(
+                                      task["instruction"] ?? "",
+                                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                               Text(
+                                "+${task["xpReward"]} XP",
+                                style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ),
 
@@ -398,42 +647,80 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
     );
   }
 
-  // --- Helper for the Care Guide rows ---
+  // --- BigDataCloud Geocoding API ---
+  Future<Map<String, String?>> _getPlaceFromCoordinates(double lat, double lng) async {
+    // TODO: Replace with valid BigDataCloud API Key
+    const apiKey = "bdc_af85516067754b20a400b86a111a14c2"; 
+    final url = Uri.parse(
+        "https://api-bdc.net/data/reverse-geocode?latitude=$lat&longitude=$lng&localityLanguage=en&key=$apiKey");
+
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        // Mapping fields based on BigDataCloud response schema
+        String? district = data['city'];
+        if (district == null || district.isEmpty) {
+          district = data['locality'];
+        }
+        
+        String? state = data['principalSubdivision'];
+        String? country = data['countryName'];
+
+        return {"district": district, "state": state, "country": country};
+      } else {
+        print("BigDataCloud API Error: ${response.statusCode} - ${response.body}");
+      }
+    } catch (e) {
+      print("BigDataCloud Geocoding Error: $e");
+    }
+    return {"district": null, "state": null, "country": null};
+  }
+
+  // --- Helpers ---
+
+  Color _getHealthColor(String? status) {
+    switch (status) {
+      case "HEALTHY": return Colors.green;
+      case "WILTED": return Colors.orange;
+      case "DISEASED": return Colors.red;
+      default: return Colors.grey;
+    }
+  }
+
+  IconData _getActionIcon(String? action) {
+    switch (action) {
+      case "WATER": return Icons.water_drop;
+      case "FERTILIZE": return Icons.science;
+      case "PRUNE": return Icons.content_cut;
+      case "SUNLIGHT": return Icons.wb_sunny;
+      default: return Icons.check_circle_outline;
+    }
+  }
+
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Icon(icon, color: Colors.white54, size: 20),
-          const SizedBox(width: 12),
+          Icon(icon, color: Colors.white54, size: 18),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(color: Colors.white70)),
+          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(value, style: const TextStyle(color: Colors.white70)),
-              ],
-            ),
+              child: Text(
+                  value, 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+              )
           ),
         ],
       ),
     );
   }
 
-  Widget _errorView() {
-    return const Center(
-      child: Text(
-        "Failed to load plant data",
-        style: TextStyle(color: Colors.white),
-      ),
-    );
-  }
+
 }
+

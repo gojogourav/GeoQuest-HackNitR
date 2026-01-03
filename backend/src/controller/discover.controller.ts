@@ -19,7 +19,6 @@ export const AnalyzeAndUpload = asyncHandler(
 
     console.log(` Generating Habit Schedule for: ${locationContext}`);
 
-    // --- 2. AI ANALYSIS (The Quest Generator) ---
     const uploadPromise = imagekit.upload({
       file: file.buffer,
       fileName: `geo_${Date.now()}_${userId}.jpg`,
@@ -84,7 +83,7 @@ export const AnalyzeAndUpload = asyncHandler(
         contents: [{
             role: "user",
             parts: [
-              { inlineData: { mimeType: file.mimetype || "image/jpeg", data: file.buffer.toString("base64") } },
+              { inlineData: { mimeType: (file.mimetype === "application/octet-stream" ? "image/jpeg" : file.mimetype) || "image/jpeg", data: file.buffer.toString("base64") } },
               { text: questPrompt }
             ]
         }],
@@ -101,9 +100,7 @@ export const AnalyzeAndUpload = asyncHandler(
       return res.status(400).json({ error: "Not a plant", details: aiResult });
     }
 
-    // --- 3. SAVE TO DB ---
     
-    // Ensure District
     await prisma.district.upsert({
         where: { id: districtId },
         create: { id: districtId, country, state, district },
@@ -170,7 +167,6 @@ export const AnalyzeAndUpload = asyncHandler(
             }
         });
 
-        // E. Update User
         await tx.districtObjectRarity.upsert({
             where: { districtId_objectId: { districtId, objectId: object.id } },
             create: { districtId, objectId: object.id, discoveryCount: 1 },
@@ -209,7 +205,6 @@ export const AnalyzeAndUpload = asyncHandler(
 
 export const getAllDiscoveries = asyncHandler(
   async (req: Request, res: Response) => {
-    // Simple Pagination
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const skip = (page - 1) * limit;
@@ -248,7 +243,6 @@ export const getAllDiscoveries = asyncHandler(
 export const getUserDiscoveries = asyncHandler(
   async (req: Request, res: Response) => {
     const userId = (req as any).user?.uid; // From token
-    // OR allow viewing other profiles: const userId = req.params.userId || (req as any).user?.uid;
 
     const discoveries = await prisma.discovery.findMany({
       where: { userId: userId },

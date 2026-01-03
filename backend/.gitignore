@@ -22,3 +22,5 @@ yarn-debug.log*
 .idea/
 
 /src/generated/prisma
+
+service-account.json

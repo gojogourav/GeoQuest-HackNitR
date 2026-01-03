@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:frontend/screens/authScreen.dart';
 import 'package:frontend/screens/home.dart';
+import 'package:frontend/services/api.service.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
@@ -83,6 +84,19 @@ class AuthService {
       final User? user = userCredential.user;
 
       if (user != null) {
+        // --- SYNC WITH BACKEND ---
+        try {
+           // Force refresh token to ensure we have a valid one
+          final String? idToken = await user.getIdToken(true);
+          if (idToken != null) {
+            await ApiService.syncUserWithBackend(idToken);
+          }
+        } catch (e) {
+          print("⚠️ Backend Sync Warning: $e");
+          // optional: don't block login if backend fails, just log it
+        }
+        // -------------------------
+
         final userDoc = FirebaseFirestore.instance
             .collection("users")
             .doc(user.uid);
