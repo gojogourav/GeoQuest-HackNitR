@@ -97,6 +97,7 @@ model Plant {
   healthScore Int    @default(100) // 0-100
   status      String @default("HEALTHY") // HEALTHY, WILTED, DORMANT
 
+  tasks      CareTask[]
   caretakers PlantCaretaker[]
   logs       CareLog[]
 
@@ -104,6 +105,27 @@ model Plant {
   updatedAt DateTime @updatedAt
 
   @@index([latitude, longitude])
+}
+
+model CareTask {
+  id String @id @default(uuid())
+
+  plantId String
+  plant   Plant  @relation(fields: [plantId], references: [id])
+
+  taskName      String // e.g. "Morning Sip"
+  action        String // "WATER", "FERTILIZE"
+  frequencyDays Int // e.g. 2
+  xpReward      Int // e.g. 15
+  instruction   String? // "Keep soil moist"
+
+  // Tracking for the UI
+  lastCompletedAt DateTime?
+  nextDueAt       DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([plantId])
 }
 
 model PlantCaretaker {

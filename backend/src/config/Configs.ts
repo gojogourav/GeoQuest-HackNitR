@@ -13,6 +13,8 @@ const prisma = new PrismaClient();
 
 export default prisma;
 
+
+
 export const prompt = `
 Analyze this image strictly.
 
@@ -39,6 +41,7 @@ Return JSON with this exact structure:
     "screenOrPhoto": 0.0
   },
   "rarity": {
+    "score":"give a score from 0 to 10 where 0 is very common in that region 2 is common 5 is rare 7 is very rare and 10 is endangered"
     "level": "Very Common | Common | Occasional | Rare | Very Rare",
     "locality": "Most probable user state or district [if don,t know then set region to india]",
     "note": "Short explanation of how common or rare this plant is in that region [probably in india]"
