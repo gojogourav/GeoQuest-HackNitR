@@ -287,109 +287,173 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
           /// TOP GLASS APP BAR
-          Positioned(
-            top: 50,
-            left: 16,
-            right: 16,
-            child: _glassContainer(
-              height: 72,
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: _goToCurrentLocation,
-                    icon: const Icon(Icons.my_location, color: Colors.white),
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: const Text(
-                        'GeoQuest',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const StoredImageScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.photo_library, color: Colors.white),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          /// CAMERA FLOATING BUTTON
           // Positioned(
-          //   bottom: 130,
-          //   right: 10,
-          //   child: GestureDetector(
-          //     onTap: () => openCamera(context),
+          //   top: 64,
+          //   left: 0,
+          //   right: 0,
+          //   child: Align(
+          //     alignment: Alignment.topCenter,
+          // child: ClipRRect(
+          //   borderRadius: BorderRadius.circular(34),
+          //   child: BackdropFilter(
+          //     filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           //     child: Container(
-          //       width: 72,
-          //       height: 72,
+          //       padding: const EdgeInsets.symmetric(
+          //         horizontal: 22,
+          //         vertical: 12,
+          //       ),
           //       decoration: BoxDecoration(
-          //         shape: BoxShape.circle,
-          //         gradient: const LinearGradient(
-          //           colors: [Colors.greenAccent, Colors.tealAccent],
+          //         color: Colors.black.withOpacity(0.35), // 👈 key change
+          //         borderRadius: BorderRadius.circular(34),
+          //         border: Border.all(
+          //           color: Colors.white.withOpacity(0.18),
+          //           width: 1,
           //         ),
           //         boxShadow: [
           //           BoxShadow(
-          //             color: Colors.greenAccent.withOpacity(0.6),
-          //             blurRadius: 24,
-          //             spreadRadius: 2,
+          //             color: Colors.black.withOpacity(0.25),
+          //             blurRadius: 18,
+          //             offset: const Offset(0, 10),
           //           ),
           //         ],
           //       ),
-          //       child: const Icon(
-          //         Icons.camera_alt,
-          //         color: Colors.black,
-          //         size: 32,
+          //           child: const Text(
+          //             "GeoQuest",
+          //             style: TextStyle(
+          //               color: Colors.white,
+          //               fontWeight: FontWeight.w700,
+          //               fontSize: 20,
+          //               letterSpacing: 1.3,
+          //             ),
+          //           ),
+          //         ),
           //       ),
           //     ),
           //   ),
           // ),
 
-          /// LoaggOut FLOATING BUTTON
+          // location botton
+          // Positioned(
+          //   top: 64, // aligns vertically with title
+          //   right: 20,
+          //   child: GestureDetector(
+          //     onTap: _goToCurrentLocation, // optional
+          //     child: ClipOval(
+          //       child: BackdropFilter(
+          //         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          //         child: Container(
+          //           width: 42,
+          //           height: 42,
+          //           decoration: BoxDecoration(
+          //             color: Colors.black.withOpacity(0.4),
+          //             border: Border.all(
+          //               color: Colors.greenAccent.withOpacity(0.4),
+          //             ),
+          //             shape: BoxShape.circle,
+          //             boxShadow: [
+          //               BoxShadow(
+          //                 color: Colors.greenAccent.withOpacity(0.3),
+          //                 blurRadius: 12,
+          //               ),
+          //             ],
+          //           ),
+          //           child: const Icon(
+          //             Icons.my_location,
+          //             color: Colors.greenAccent,
+          //             size: 22,
+          //           ),
+          //         ),
+          //       ),
+          //     ),
+          //   ),
+          // ),
           Positioned(
-            bottom: 130,
-            left: 10,
-            child: GestureDetector(
-              onTap: () async {
-                final auth = AuthService();
-                await auth.signOut();
-                if (mounted) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginPage()),
-                  );
-                }
-              },
-              child: Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.greenAccent.withOpacity(0.6),
-                      blurRadius: 24,
-                      spreadRadius: 2,
+            top: 55,
+            left: 0,
+            right: 0,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Streak Icon
+                Positioned(
+                  right: 30,
+                  child: InkWell(
+                    onTap: _goToCurrentLocation,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 22,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.35), // 👈 key change
+                        borderRadius: BorderRadius.circular(34),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.18),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 18,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: const Icon(
+                          Icons.telegram,
+                          color: Colors.greenAccent,
+                          size: 22,
+                        ),
+                      ),
                     ),
-                  ],
+                  ),
                 ),
-                child: const Icon(Icons.logout, color: Colors.black, size: 32),
-              ),
+
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(34),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 22,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(
+                            0.35,
+                          ), // 👈 key change
+                          borderRadius: BorderRadius.circular(34),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.18),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 18,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          "GeoQuest",
+                          style: const TextStyle(
+                            // fontFamily: 'AppleEmoji',
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 20,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -408,7 +472,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.white.withOpacity(0.16), // softer glass
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.22),
+                      color: const Color.fromARGB(
+                        255,
+                        20,
+                        224,
+                        6,
+                      ).withOpacity(0.22),
                       width: 1,
                     ),
                     boxShadow: [
@@ -455,8 +524,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Expanded(
                             child: _actionTile(
-                              icon: Icons.home_filled,
-                              label: "Home",
+                              icon: Icons.person,
+                              label: "Community",
                               color: Colors.orange,
                               onTap: () {
                                 // go home
@@ -466,11 +535,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(width: 14),
                           Expanded(
                             child: _actionTile(
-                              icon: Icons.settings,
-                              label: "Settings",
+                              icon: Icons.logout,
+                              label: "LogOut",
                               color: Colors.purple,
-                              onTap: () {
-                                // settings
+                              onTap: () async {
+                                final auth = AuthService();
+                                await auth.signOut();
+                                if (mounted) {
+                                  Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const LoginPage(),
+                                    ),
+                                  );
+                                }
                               },
                             ),
                           ),
