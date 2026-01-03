@@ -108,4 +108,30 @@ class ApiService {
       return [];
     }
   }
+<<<<<<< HEAD
 }
+=======
+  static Future<Map<String, dynamic>?> getLeaderboard(String firebaseToken) async {
+    try {
+      final url = Uri.parse('$baseUrl/user/leaderboard');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $firebaseToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        print("❌ Fetch Leaderboard Failed (${response.statusCode}): ${response.body}");
+        return null;
+      }
+    } catch (e) {
+      print("⚠️ Connection Error: $e");
+      return null;
+    }
+  }
+}
+>>>>>>> b4dad48c8dcccbb48d73cf88db3e5184cea40436

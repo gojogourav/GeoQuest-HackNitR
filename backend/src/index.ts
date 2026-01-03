@@ -5,6 +5,7 @@ import { env } from "./config/env";
 import AuthRouter from "./routes/auth.routes";
 import discoveryRouter from "./routes/discover.routes";
 import dailyCareRouter from "./routes/dailyCare.routes";
+import UserRouter from "./routes/user.routes";
 import { errorHandler } from "./middleware/error.middleware";
 
 const app: Express = express();
@@ -37,6 +38,7 @@ app.get("/health", (_, res) => {
 app.use("/api/auth", AuthRouter);
 app.use("/api/discover", discoveryRouter);
 app.use("/api/care", dailyCareRouter);
+app.use("/api/user", UserRouter);
 
 // Error Handling (Must be last)
 app.use(errorHandler);

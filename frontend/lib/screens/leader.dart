@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:frontend/services/api.service.dart';
 
 class LeaderboardPage extends StatefulWidget {
   const LeaderboardPage({super.key});
@@ -9,17 +11,47 @@ class LeaderboardPage extends StatefulWidget {
 }
 
 class _LeaderboardPageState extends State<LeaderboardPage> {
-  // Mock Data
-  final List<Map<String, dynamic>> _users = [
-    {'name': 'Alex', 'score': 2400, 'avatar': '', 'rank': 1},
-    {'name': 'Sarah', 'score': 2100, 'avatar': '', 'rank': 2},
-    {'name': 'Mike', 'score': 1850, 'avatar': '', 'rank': 3},
-    {'name': 'Emma', 'score': 1600, 'avatar': '', 'rank': 4},
-    {'name': 'John', 'score': 1450, 'avatar': '', 'rank': 5},
-    {'name': 'You', 'score': 1200, 'avatar': '', 'rank': 6}, // Current user
-    {'name': 'David', 'score': 1100, 'avatar': '', 'rank': 7},
-    {'name': 'Lisa', 'score': 900, 'avatar': '', 'rank': 8},
-  ];
+  List<Map<String, dynamic>> _users = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLeaderboard();
+  }
+
+  Future<void> _fetchLeaderboard() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      final token = await user.getIdToken();
+      final data = await ApiService.getLeaderboard(token!); // Method we just added
+
+      if (data != null && data['leaderboard'] != null) {
+        final List<dynamic> rawList = data['leaderboard'];
+        
+        setState(() {
+          _users = rawList.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final item = entry.value;
+            return {
+              'name': item['username'] ?? "Unknown",
+              'score': item['xp'] ?? 0,
+              'avatar': item['photoUrl'],
+              'rank': idx + 1,
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      print("Error fetching leaderboard: $e");
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,52 +94,85 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
         child: Column(
           children: [
             const SizedBox(height: 100), // Space for AppBar
-            // Top 3 Podium
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _buildPodiumItem(_users[1], 80, Colors.grey.shade400), // 2nd
-                  _buildPodiumItem(_users[0], 110, Colors.amber), // 1st
-                  _buildPodiumItem(_users[2], 80, Colors.brown.shade400), // 3rd
-                ],
-              ),
-            ),
-            const SizedBox(height: 30),
-            // Rest of the list
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(30),
-                    topRight: Radius.circular(30),
-                  ),
-                  border: Border(
-                    top: BorderSide(color: Colors.white.withOpacity(0.1)),
-                  ),
+            
+            if (_isLoading)
+              const Expanded(child: Center(child: CircularProgressIndicator(color: Colors.greenAccent)))
+            else if (_users.isEmpty)
+              const Expanded(child: Center(child: Text("No explorers yet!", style: TextStyle(color: Colors.white70))))
+            else if (_users.length < 5)
+              // Simple List View for < 5 users
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(top: 20, bottom: 100),
+                  itemCount: _users.length,
+                  itemBuilder: (context, index) {
+                    return _buildListItem(_users[index]);
+                  },
                 ),
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(30),
-                    topRight: Radius.circular(30),
+              )
+            else ...[
+              // Top 3 Podium
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // 2nd Place
+                    if (_users.length > 1) 
+                      _buildPodiumItem(_users[1], 80, Colors.grey.shade400)
+                    else 
+                      const SizedBox(width: 80),
+
+                    // 1st Place (Always exists if we are in this block)
+                    _buildPodiumItem(_users[0], 110, Colors.amber), 
+
+                    // 3rd Place
+                    if (_users.length > 2)
+                      _buildPodiumItem(_users[2], 80, Colors.brown.shade400)
+                    else
+                      const SizedBox(width: 80),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+            
+              // Rest of the list
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
+                    ),
+                    border: Border(
+                      top: BorderSide(color: Colors.white.withOpacity(0.1)),
+                    ),
                   ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                    child: ListView.builder(
-                      padding: const EdgeInsets.only(top: 20, bottom: 100),
-                      itemCount: _users.length - 3,
-                      itemBuilder: (context, index) {
-                        final user = _users[index + 3];
-                        return _buildListItem(user);
-                      },
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
+                    ),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(top: 20, bottom: 100),
+                        // Handle cases where we have fewer than 3 users
+                        itemCount: (_users.length > 3) ? _users.length - 3 : 0,
+                        itemBuilder: (context, index) {
+                          // If we have >3 users, show them. 
+                          // The first 3 are on podium, so we start from index 3
+                          final user = _users[index + 3];
+                          return _buildListItem(user);
+                        },
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ]
           ],
         ),
       ),
@@ -180,52 +245,68 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
   }
 
   Widget _buildListItem(Map<String, dynamic> user) {
+    final bool isTop = user['rank'] == 1;
+    
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: isTop ? Colors.amber.withOpacity(0.1) : Colors.white.withOpacity(0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: isTop 
+            ? Border.all(color: Colors.amber, width: 2)
+            : Border.all(color: Colors.white.withOpacity(0.05)),
+        boxShadow: isTop ? [
+          BoxShadow(
+            color: Colors.amber.withOpacity(0.4),
+            blurRadius: 12,
+            spreadRadius: 1,
+          )
+        ] : [],
       ),
       child: Row(
         children: [
           Container(
             width: 30,
             alignment: Alignment.center,
-            child: Text(
-              "${user['rank']}",
-              style: const TextStyle(
-                color: Colors.white70,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
+            child: isTop 
+              ? const Text("👑", style: TextStyle(fontSize: 20))
+              : Text(
+                  "${user['rank']}",
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
           ),
           const SizedBox(width: 14),
           CircleAvatar(
             radius: 20,
-            backgroundColor: Colors.blueGrey.shade800,
+            backgroundColor: isTop ? Colors.amber : Colors.blueGrey.shade800,
             child: Text(
               user['name'][0],
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(
+                color: isTop ? Colors.black : Colors.white,
+                fontWeight: FontWeight.bold
+              ),
             ),
           ),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
               user['name'],
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: isTop ? Colors.amberAccent : Colors.white,
                 fontSize: 16,
-                fontWeight: FontWeight.w500,
+                fontWeight: isTop ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ),
           Text(
             "${user['score']} pts",
-            style: const TextStyle(
-              color: Colors.greenAccent,
+            style: TextStyle(
+              color: isTop ? Colors.amber : Colors.greenAccent,
               fontSize: 14,
               fontWeight: FontWeight.bold,
             ),
