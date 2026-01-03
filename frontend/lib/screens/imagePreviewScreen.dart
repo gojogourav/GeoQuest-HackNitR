@@ -650,7 +650,7 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
   // --- BigDataCloud Geocoding API ---
   Future<Map<String, String?>> _getPlaceFromCoordinates(double lat, double lng) async {
     // TODO: Replace with valid BigDataCloud API Key
-    const apiKey = "bdc_af85516067754b20a400b86a111a14c2"; 
+    const apiKey = "bdc_6c07b3c6e21a4594a92d4fd6260c68a5"; 
     final url = Uri.parse(
         "https://api-bdc.net/data/reverse-geocode?latitude=$lat&longitude=$lng&localityLanguage=en&key=$apiKey");
 
