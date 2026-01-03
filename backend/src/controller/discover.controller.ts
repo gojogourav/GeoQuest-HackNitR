@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/handler";
-import { ai, imagekit } from "../config/Configs"; 
-import prisma from "../config/Configs"; 
+import { ai, imagekit } from "../config/Configs";
+import prisma from "../config/Configs";
 
 export const AnalyzeAndUpload = asyncHandler(
   async (req: Request, res: Response) => {
@@ -26,8 +26,8 @@ export const AnalyzeAndUpload = asyncHandler(
     });
 
     const analysisPromise = (async () => {
-      const modelId = "gemini-flash-lite-latest"; 
-      
+      const modelId = "gemini-flash-lite-latest";
+
       const questPrompt = `
         Analyze this image strictly as a Game Master & Botanist.
         
@@ -81,11 +81,11 @@ export const AnalyzeAndUpload = asyncHandler(
       const response = await ai.models.generateContent({
         model: modelId,
         contents: [{
-            role: "user",
-            parts: [
-              { inlineData: { mimeType: (file.mimetype === "application/octet-stream" ? "image/jpeg" : file.mimetype) || "image/jpeg", data: file.buffer.toString("base64") } },
-              { text: questPrompt }
-            ]
+          role: "user",
+          parts: [
+            { inlineData: { mimeType: (file.mimetype === "application/octet-stream" ? "image/jpeg" : file.mimetype) || "image/jpeg", data: file.buffer.toString("base64") } },
+            { text: questPrompt }
+          ]
         }],
         config: { responseMimeType: "application/json" },
       });
@@ -100,89 +100,89 @@ export const AnalyzeAndUpload = asyncHandler(
       return res.status(400).json({ error: "Not a plant", details: aiResult });
     }
 
-    
+
     await prisma.district.upsert({
-        where: { id: districtId },
-        create: { id: districtId, country, state, district },
-        update: {}
+      where: { id: districtId },
+      create: { id: districtId, country, state, district },
+      update: {}
     });
 
     const dbResult = await prisma.$transaction(async (tx) => {
-        // A. Find/Create Species
-        let object = await tx.object.findFirst({
-            where: { commonName: { equals: aiResult.commonName, mode: "insensitive" } }
-        });
+      // A. Find/Create Species
+      let object = await tx.object.findFirst({
+        where: { commonName: { equals: aiResult.commonName, mode: "insensitive" } }
+      });
 
-        if (!object) {
-            object = await tx.object.create({
-                data: {
-                    category: "Plant",
-                    commonName: aiResult.commonName,
-                    scientificName: aiResult.scientificName,
-                    description: aiResult.description,
-                    verified: true
-                }
-            });
+      if (!object) {
+        object = await tx.object.create({
+          data: {
+            category: "Plant",
+            commonName: aiResult.commonName,
+            scientificName: aiResult.scientificName,
+            description: aiResult.description,
+            verified: true
+          }
+        });
+      }
+
+      // B. Rarity & XP Logic
+      const aiScore = aiResult.rarity?.score || 0;
+      const generalMultiplier = Math.max(1, aiScore);
+
+      const rarityRecord = await tx.districtObjectRarity.findUnique({
+        where: { districtId_objectId: { districtId, objectId: object.id } }
+      });
+
+      const currentCount = rarityRecord ? rarityRecord.discoveryCount : 0;
+      let localMultiplier = currentCount === 0 ? 5.0 : (currentCount < 10 ? 2.0 : 1.0);
+
+      const finalMultiplier = generalMultiplier * localMultiplier;
+      const xpEarned = Math.floor(50 * finalMultiplier);
+
+      // C. Save Discovery
+      const discovery = await tx.discovery.create({
+        data: {
+          userId,
+          objectId: object.id,
+          districtId,
+          latitude: parseFloat(latitude),
+          longitude: parseFloat(longitude),
+          imageUrl: uploadResult.url,
+          rarityScore: finalMultiplier,
+          verified: true
         }
+      });
 
-        // B. Rarity & XP Logic
-        const aiScore = aiResult.rarity?.score || 0; 
-        const generalMultiplier = Math.max(1, aiScore); 
+      // D. CREATE PLANT & SAVE HABITS 
+      // We save the AI-generated schedule into the plant's description or a JSON field 
+      // so the frontend can load it later.
+      const plant = await tx.plant.create({
+        data: {
+          discoveryId: discovery.id,
+          objectId: object.id,
+          latitude: parseFloat(latitude),
+          longitude: parseFloat(longitude),
+          healthScore: aiResult.health?.score || 100,
+          status: aiResult.health?.status || "HEALTHY",
+        }
+      });
 
-        const rarityRecord = await tx.districtObjectRarity.findUnique({
-            where: { districtId_objectId: { districtId, objectId: object.id } }
-        });
-        
-        const currentCount = rarityRecord ? rarityRecord.discoveryCount : 0;
-        let localMultiplier = currentCount === 0 ? 5.0 : (currentCount < 10 ? 2.0 : 1.0);
-        
-        const finalMultiplier = generalMultiplier * localMultiplier;
-        const xpEarned = Math.floor(50 * finalMultiplier);
+      await tx.districtObjectRarity.upsert({
+        where: { districtId_objectId: { districtId, objectId: object.id } },
+        create: { districtId, objectId: object.id, discoveryCount: 1 },
+        update: { discoveryCount: { increment: 1 } }
+      });
 
-        // C. Save Discovery
-        const discovery = await tx.discovery.create({
-            data: {
-                userId,
-                objectId: object.id,
-                districtId,
-                latitude: parseFloat(latitude),
-                longitude: parseFloat(longitude),
-                imageUrl: uploadResult.url,
-                rarityScore: finalMultiplier,
-                verified: true
-            }
-        });
+      const currentUser = await tx.user.findUnique({ where: { id: userId } });
+      const newTotalXp = (currentUser?.xp || 0) + xpEarned;
+      const newLevel = Math.floor(1 + (newTotalXp / 1000));
 
-        // D. CREATE PLANT & SAVE HABITS 
-        // We save the AI-generated schedule into the plant's description or a JSON field 
-        // so the frontend can load it later.
-        const plant = await tx.plant.create({
-            data: {
-                discoveryId: discovery.id,
-                objectId: object.id,
-                latitude: parseFloat(latitude),
-                longitude: parseFloat(longitude),
-                healthScore: aiResult.health?.score || 100,
-                status: aiResult.health?.status || "HEALTHY",
-            }
-        });
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: { xp: newTotalXp, totalDiscoveries: { increment: 1 }, level: newLevel }
+      });
 
-        await tx.districtObjectRarity.upsert({
-            where: { districtId_objectId: { districtId, objectId: object.id } },
-            create: { districtId, objectId: object.id, discoveryCount: 1 },
-            update: { discoveryCount: { increment: 1 } }
-        });
-
-        const currentUser = await tx.user.findUnique({ where: { id: userId } });
-        const newTotalXp = (currentUser?.xp || 0) + xpEarned;
-        const newLevel = Math.floor(1 + (newTotalXp / 1000));
-
-        const updatedUser = await tx.user.update({
-            where: { id: userId },
-            data: { xp: newTotalXp, totalDiscoveries: { increment: 1 }, level: newLevel }
-        });
-
-        return { discovery, plant, xpEarned, updatedUser, habits: aiResult.careSchedule };
+      return { discovery, plant, xpEarned, updatedUser, habits: aiResult.careSchedule };
     });
 
     return res.status(200).json({
@@ -190,12 +190,12 @@ export const AnalyzeAndUpload = asyncHandler(
       image_url: uploadResult.url,
       plant_data: aiResult,
       game_data: {
-          xp_earned: dbResult.xpEarned,
-          new_total_xp: dbResult.updatedUser.xp,
-          level: dbResult.updatedUser.level,
-          plant_id: dbResult.plant.id,
-          // SEND HABITS TO FRONTEND
-          quests: dbResult.habits 
+        xp_earned: dbResult.xpEarned,
+        new_total_xp: dbResult.updatedUser.xp,
+        level: dbResult.updatedUser.level,
+        plant_id: dbResult.plant.id,
+        // SEND HABITS TO FRONTEND
+        quests: dbResult.habits
       }
     });
   }
@@ -212,10 +212,10 @@ export const getAllDiscoveries = asyncHandler(
     const discoveries = await prisma.discovery.findMany({
       skip: skip,
       take: limit,
-      orderBy: { discoveredAt: 'desc' }, 
+      orderBy: { discoveredAt: 'desc' },
       include: {
         user: {
-          select: { username: true, photoUrl: true, level: true } 
+          select: { username: true, photoUrl: true, level: true }
         },
         object: {
           select: { commonName: true, scientificName: true, category: true }
@@ -250,7 +250,7 @@ export const getUserDiscoveries = asyncHandler(
       include: {
         object: true,
         district: {
-            select: { district: true }
+          select: { district: true }
         }
       }
     });

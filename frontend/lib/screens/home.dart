@@ -374,7 +374,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Streak Icon
                 Positioned(
                   right: 30,
                   child: InkWell(
@@ -385,7 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.35), // 👈 key change
+                        color: Colors.black.withOpacity(0.35),
                         borderRadius: BorderRadius.circular(34),
                         border: Border.all(
                           color: Colors.white.withOpacity(0.18),
@@ -402,7 +401,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: const Icon(
-                          Icons.telegram,
+                          Icons.rocket_launch_outlined,
                           color: Colors.greenAccent,
                           size: 22,
                         ),
