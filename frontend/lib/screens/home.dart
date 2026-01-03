@@ -1,6 +1,9 @@
 // ignore_for_file: unused_element, unused_field, unused_local_variable
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:frontend/models/discovery.dart';
 import 'package:frontend/screens/cameraScreen.dart';
 import 'package:frontend/screens/imagePreviewScreen.dart';
 import 'package:geolocator/geolocator.dart';
@@ -18,6 +21,8 @@ class _HomeScreenState extends State<HomeScreen> {
   CameraPosition? _initialCameraPosition;
   GoogleMapController? _mapController;
   LatLng? _currentLocation;
+  List<Discovery> _discoveries = [];
+  Set<Marker> _markers = {};
 
   @override
   void initState() {
@@ -50,23 +55,76 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {}
   }
 
+  // load discoveries
+  Future<void> loadDiscoveries() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList('discoveries') ?? [];
+    _discoveries = list.map((e) => Discovery.fromJson(json.decode(e))).toList();
+
+    _markers = _discoveries.map((d) {
+      return Marker(
+        markerId: MarkerId(d.imagePath),
+        position: LatLng(d.lat, d.lng),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ImagePreviewScreen()),
+          );
+        },
+      );
+    }).toSet();
+    setState(() {});
+  }
+
   // Opening camera function
   Future<void> openCamera(BuildContext context) async {
-    final imagePAth = await Navigator.push<String>(
+    final imagePath = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (_) => const CameraScreen()),
     );
 
-    if (imagePAth == null || _currentLocation == null) return;
+    if (imagePath == null || _currentLocation == null) return;
 
     final prefs = await SharedPreferences.getInstance();
 
     // Save Image path in local device storage
     final images = prefs.getStringList('images') ?? [];
-    images.insert(0, imagePAth);
+    images.insert(0, imagePath);
     await prefs.setStringList('images', images);
+
+    // Create Discovery
+    final discovery = Discovery(
+      imagePath: imagePath,
+      lat: _currentLocation!.latitude,
+      lng: _currentLocation!.longitude,
+      plantData: {}, // later fill by AI
+    );
+
+    // save discovers in local
+    final discoveries = prefs.getStringList('discoveries') ?? [];
+
+    // Prevent duplicates
+    final exists = discoveries.any((d) {
+      final decoded = json.decode(d);
+      return decoded['imagePath'] == imagePath;
+    });
+
+    if (!exists) {
+      discoveries.add(json.encode(discovery.toJson()));
+      await prefs.setStringList('discoveries', discoveries);
+    }
+
+    // update map marker
+    // await loadDiscoveries();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ImagePreviewScreen()),
+    );
   }
 
+  // }
   @override
   Widget build(BuildContext context) {
     return Scaffold();
