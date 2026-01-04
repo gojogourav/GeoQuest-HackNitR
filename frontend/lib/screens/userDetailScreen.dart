@@ -8,6 +8,8 @@ import 'package:frontend/models/discovery.dart';
 import 'package:frontend/services/api.service.dart';
 import 'package:frontend/screens/imagePreviewScreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:frontend/screens/storedImageScreen.dart';
 
 class UserDetailScreen extends StatefulWidget {
   const UserDetailScreen({super.key});
@@ -23,6 +25,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
   int userXp = 0;
   List<Discovery> discoveries = [];
   List<dynamic> xpHistory = [];
+  List<dynamic> myGarden = []; // NEW: Adopted plants
   bool isLoading = true;
 
   @override
@@ -42,11 +45,19 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
       final profileFuture = ApiService.syncUserWithBackend(token);
       final discoveriesFuture = ApiService.getUserDiscoveries(token);
       final historyFuture = ApiService.getXPHistory(token);
+      final gardenFuture = ApiService.getMyGarden(token); // NEW
 
-      final results = await Future.wait([profileFuture, discoveriesFuture, historyFuture]);
+      final results = await Future.wait([
+        profileFuture, 
+        discoveriesFuture, 
+        historyFuture,
+        gardenFuture
+      ]);
+      
       final profileData = results[0] as Map<String, dynamic>?;
       final discoveriesList = results[1] as List<dynamic>;
       final historyList = results[2] as List<dynamic>;
+      final gardenList = results[3] as List<dynamic>;
 
       final mappedDiscoveries = discoveriesList.map((d) {
         return Discovery(
@@ -58,12 +69,29 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
             "canonicalName": d['object']?['canonicalName'],
             "scientificName": d['object']?['scientificName'],
             "description": d['object']?['description'],
+            "plantId": d['plant']?['id'], 
+            "careSchedule": (d['plant']?['tasks'] != null && (d['plant']['tasks'] as List).isNotEmpty)
+                ? d['plant']['tasks']
+                : [
+                    {
+                      "taskName": "Watering",
+                      "action": "WATER",
+                      "frequencyDays": 2,
+                      "xpReward": 15,
+                      "instruction": "Keep soil moist but not waterlogged.",
+                      "difficulty": "Easy",
+                      "timeOfDay": "Morning"
+                    }
+                  ], 
             "health": {
-              "score": d['healthScore'] ?? 0, 
-              "status": "Check Details"
+              "score": d['plant']?['healthScore'] ?? 0, 
+              "status": d['plant']?['status'] ?? "Check Details"
             },
-            "confidence": d['confidence'] ?? 1.0,
-            // Rarity is complex to reconstruct from this endpoint, leaving null is safe now
+            "confidence": d['aiConfidence'] ?? d['confidence'] ?? 1.0,
+            "imageSourceConfidence": {
+               "realPlant": d['aiConfidence'] ?? d['confidence'] ?? 1.0,
+               "screenOrPhoto": 1.0 - ((d['aiConfidence'] ?? d['confidence'] ?? 1.0) as num).toDouble(),
+            },
           },
         );
       }).toList();
@@ -78,6 +106,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
           }
           discoveries = mappedDiscoveries;
           xpHistory = historyList;
+          myGarden = gardenList; // NEW
           isLoading = false;
         });
       }
@@ -85,11 +114,122 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
       if (mounted) setState(() => isLoading = false);
     }
   }
+  
+  // Verify Task Logic
+  Future<void> _verifyTask(String plantId, String taskId) async {
+    final picker = ImagePicker();
+    
+    // 1. Choose Source
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.greenAccent),
+              title: const Text("Take a Photo", style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.blueAccent),
+              title: const Text("Choose from Gallery", style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    // 2. Pick Image
+    final pickedFile = await picker.pickImage(source: source);
+    if (pickedFile == null) return;
+
+    // 3. Show Loading SnackBar
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20, 
+              height: 20, 
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)
+            ),
+            SizedBox(width: 16),
+            Text("Verifying with AI...", style: TextStyle(color: Colors.black)),
+          ],
+        ),
+        backgroundColor: Colors.white,
+        duration: Duration(minutes: 1), // Persist until dismissed manually
+      ),
+    );
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+
+      if (token == null) throw Exception("Auth Error");
+
+      final success = await ApiService.verifyCareTask(
+        plantId: plantId,
+        firebaseToken: token,
+        imageFile: File(pickedFile.path),
+        taskId: taskId,
+      );
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar(); // Hide Loading
+
+      if (success) {
+        // Show Success SnackBar
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.celebration, color: Colors.white),
+                SizedBox(width: 12),
+                Text("Success! +10 XP 🎉", style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        
+        // Refresh data 
+        setState(() => isLoading = true); 
+        await _loadUserData(); 
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar(); // Hide Loading
+
+      // Show Error SnackBar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text("Verification Failed: ${e.toString().replaceAll("Exception: ", "")}")),
+            ],
+          ),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7F6),
+      backgroundColor: const Color(0xFF1E1E1E), // Dark theme matching preview
       body: Stack(
         children: [
           // Background Gradient (Fixed behind scroll)
@@ -120,11 +260,30 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                         _buildProfileHeader(),
                         const SizedBox(height: 30),
                         _buildStatsRow(),
-                        const SizedBox(height: 30),
+                        
+                        // NEW: Adopted Plants Section
+                        if (myGarden.isNotEmpty) ...[
+                          const SizedBox(height: 40),
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "My Adopted Plants 🌿",
+                              style: TextStyle(
+                                color: Colors.greenAccent,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildGardenSection(),
+                        ],
+                        
+                        const SizedBox(height: 40),
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            "Your Garden",
+                            "All Discoveries",
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 20,
@@ -171,6 +330,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                 ),
 
               if (xpHistory.isNotEmpty) ...[
+                // ... (History header kept same)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -199,7 +359,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                         ),
                         child: Row(
                           children: [
-                            Container(
+                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: (isDiscovery ? Colors.green : Colors.blue).withOpacity(0.2),
@@ -211,7 +371,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                                 size: 20,
                               ),
                             ),
-                            const SizedBox(width: 14),
+                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,7 +393,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                                 ],
                               ),
                             ),
-                            Text(
+                             Text(
                               "+${item['xp']} XP",
                               style: const TextStyle(
                                 color: Colors.amber,
@@ -273,7 +433,149 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
       ),
     );
   }
+  
+  // NEW: Build Garden Section
+  Widget _buildGardenSection() {
+    return Column(
+      children: myGarden.map((plant) {
+        final tasks = plant['tasks_due'] as List<dynamic>? ?? [];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2A2A2A),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Plant Header
+              Row(
+                children: [
+                   Container(
+                     padding: const EdgeInsets.all(8),
+                     decoration: BoxDecoration(
+                       color: Colors.greenAccent.withOpacity(0.1),
+                       shape: BoxShape.circle,
+                     ),
+                     child: const Icon(Icons.local_florist, color: Colors.greenAccent),
+                   ),
+                   const SizedBox(width: 12),
+                   Expanded(
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         Text(
+                           plant['name'] ?? "My Plant",
+                           style: const TextStyle(
+                             color: Colors.white,
+                             fontWeight: FontWeight.bold,
+                             fontSize: 18,
+                           ),
+                         ),
+                         Text(
+                           "🔥 ${plant['streak'] ?? 0} Day Streak • Health: ${plant['health']}%",
+                           style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
+                         ),
+                       ],
+                     ),
+                   ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              // Tasks List
+              if (tasks.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.greenAccent, size: 20),
+                      SizedBox(width: 10),
+                      Text(
+                        "All caught up! No tasks due.",
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Column(
+                  children: tasks.map((task) => _buildTaskItem(task, plant['plant_id'])).toList(),
+                ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
 
+  Widget _buildTaskItem(dynamic task, String plantId) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _getActionIcon(task['action']), // Helper needed
+            color: Colors.orangeAccent,
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task['taskName'] ?? "Care Task",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                   "+${task['xpReward']} XP",
+                   style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => _verifyTask(plantId, task['id'] ?? ""),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.greenAccent,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            child: const Text("Verify"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getActionIcon(String? action) {
+     switch (action) {
+       case "WATER": return Icons.water_drop;
+       case "FERTILIZE": return Icons.science;
+       case "PRUNE": return Icons.content_cut;
+       case "SUNLIGHT": return Icons.wb_sunny;
+       default: return Icons.task_alt;
+     }
+  }
+
+  // ... (Keep existing _buildProfileHeader and _buildStatsRow and _buildPlantCard)
   Widget _buildProfileHeader() {
     return Column(
       children: [
@@ -369,40 +671,69 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     );
   }
 
-  // Uses StoredImageScreen card styling but with backend data
   Widget _buildPlantCard(Discovery discovery) {
-    final data = discovery.plantData;
+     // ... (Keep implementation, same as before)
+     final data = discovery.plantData;
     String displayName = "Unidentified Plant";
     if (data['canonicalName']?.toString().isNotEmpty == true) {
       displayName = data['canonicalName'];
     } else if (data['commonName']?.toString().isNotEmpty == true) {
       displayName = data['commonName'];
     }
-
-    // Isolate Health logic if needed, but StoredImageScreen is just an image.
-    // We will keep the image focus but add a small overlay for context.
     
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ImagePreviewScreen(
-              imagePath: discovery.imagePath,
-              existingData: discovery.plantData, // Pass data for view-only
-            ),
+    onTap: () async {
+      // Hybrid Loading: Try to find local cached data first for "Perfect" fidelity
+      Map<String, dynamic>? finalData = discovery.plantData;
+      String finalImagePath = discovery.imagePath;
+
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final localList = prefs.getStringList('discoveries') ?? [];
+        
+        // Find matching plantId in local storage
+        final targetId = discovery.plantData['plantId'];
+        if (targetId != null) {
+          for (var item in localList) {
+            final localJson = json.decode(item);
+            final localPlantData = localJson['plantData'];
+            
+            // Check ID match
+            if (localPlantData != null && localPlantData['plantId'] == targetId) {
+              print("📱 Found local cache for $targetId! Using high-res data.");
+              finalData = localPlantData;
+              // Optional: Use local image path if it exists for faster load
+              if (await File(localJson['imagePath']).exists()) {
+                finalImagePath = localJson['imagePath'];
+              }
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        print("Local cache lookup failed: $e");
+      }
+
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ImagePreviewScreen(
+            imagePath: finalImagePath,
+            existingData: finalData, 
           ),
-        );
-      },
-      child: Hero(
-        tag: 'image_${discovery.imagePath}',
+        ),
+      );
+    },
+    child: Hero(
+      tag: 'image_${discovery.imagePath}',
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2), // Darker shadow for dark bg
+                color: Colors.black.withOpacity(0.2), 
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -417,7 +748,6 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                 ? Image.network(discovery.imagePath, fit: BoxFit.cover) 
                 : Image.file(File(discovery.imagePath), fit: BoxFit.cover),
                 
-                // Subtle Gradient Overlay for Text Visibility
                 Positioned(
                   bottom: 0, left: 0, right: 0,
                   child: Container(
@@ -433,18 +763,38 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
 
                 Positioned(
                   bottom: 10, left: 12, right: 12,
-                  child: Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      decoration: TextDecoration.none, // Fix Hero text glitch
+                  child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        decoration: TextDecoration.none, 
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+                // Confidence Warning
+                if ((data['confidence'] as num? ?? 1.0) < 0.8)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.priority_high, color: Colors.redAccent, size: 20),
                     ),
                   ),
-                ),
               ],
             ),
           ),

@@ -29,6 +29,7 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
   String loadingMessage = "Initializing Scan...";
   bool hasError = false;
   String errorMessage = "";
+  bool hasAdopted = false; // NEW state
 
   String get _cacheKey => "plant_data_${widget.imagePath}";
 
@@ -37,6 +38,7 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
     super.initState();
     _loadData();
   }
+
 
   // Determine source of data
   Future<void> _loadData() async {
@@ -143,7 +145,14 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
       }
 
       if (response.statusCode != 200) {
-        throw Exception(response.body);
+        String cleanError = response.body;
+        try {
+          final errJson = json.decode(response.body);
+          if (errJson['error'] != null) {
+            cleanError = errJson['error'];
+          }
+        } catch (_) {}
+        throw Exception(cleanError);
       }
 
       final jsonResponse = json.decode(response.body);
@@ -177,6 +186,68 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
       isLoading = false;
       setState(() {});
       return false;
+    }
+  }
+
+  // adopt plant
+  Future<void> _adoptPlant() async {
+    final plantId = plantData?['plantId'];
+    final schedule = plantData?['careSchedule'];
+    
+    if (plantId == null || schedule == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cannot adopt: Missing plant info.")),
+      );
+      return;
+    }
+
+    // Show loading
+    showDialog(
+      context: context, 
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.greenAccent)),
+    );
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+      if (token == null) throw Exception("Auth Error");
+
+      final success = await ApiService.adoptPlant(
+        plantId: plantId,
+        careSchedule: schedule,
+        firebaseToken: token,
+      );
+
+      if (mounted) Navigator.pop(context); // Pop loader
+
+      if (mounted) {
+        if (success) {
+           setState(() {
+             hasAdopted = true;
+           });
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Success! You are now the Guardian."),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Adoption failed. Maybe you already adopted it?"),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error: $e")),
+          );
+      }
     }
   }
 
@@ -645,68 +716,89 @@ class _ImagePreviewScreenState extends State<ImagePreviewScreen> {
                       "Care Schedule",
                       Icons.calendar_month,
                       Column(
-                        children: (plantData!["careSchedule"] as List).map((
-                          task,
-                        ) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12.0),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white10,
-                                    borderRadius: BorderRadius.circular(8),
+                        children: [
+                          ... (plantData!["careSchedule"] as List).map((
+                            task,
+                          ) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12.0),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white10,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      _getActionIcon(task["action"]),
+                                      color: Colors.greenAccent,
+                                      size: 20,
+                                    ),
                                   ),
-                                  child: Icon(
-                                    _getActionIcon(task["action"]),
-                                    color: Colors.greenAccent,
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        task["taskName"] ?? "",
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          task["taskName"] ?? "",
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
                                         ),
-                                      ),
-                                      Text(
-                                        "${task["difficulty"]} • ${task["timeOfDay"]}",
-                                        style: const TextStyle(
-                                          color: Colors.white54,
-                                          fontSize: 12,
+                                        Text(
+                                          "${task["difficulty"]} • ${task["timeOfDay"]}",
+                                          style: const TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 12,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        task["instruction"] ?? "",
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 13,
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          task["instruction"] ?? "",
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 13,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  "+${task["xpReward"]} XP",
-                                  style: const TextStyle(
-                                    color: Colors.amber,
-                                    fontWeight: FontWeight.bold,
+                                  Text(
+                                    "+${task["xpReward"]} XP",
+                                    style: const TextStyle(
+                                      color: Colors.amber,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: hasAdopted ? Colors.white10 : Colors.greenAccent,
+                                foregroundColor: hasAdopted ? Colors.white54 : Colors.black,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: hasAdopted ? null : _adoptPlant,
+                              icon: Icon(hasAdopted ? Icons.check_circle : Icons.volunteer_activism),
+                              label: Text(
+                                hasAdopted ? "Guardian of this Plant" : "Become Guardian",
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
                             ),
-                          );
-                        }).toList(),
+                          ),
+                        ],
                       ),
                     ),
 

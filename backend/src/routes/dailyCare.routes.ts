@@ -7,7 +7,7 @@ const dailyCareRouter: Router = Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // Limit to 5MB
+  limits: { fileSize: 15 * 1024 * 1024 }, // Limit to 15MB
 });
 
 dailyCareRouter.post(

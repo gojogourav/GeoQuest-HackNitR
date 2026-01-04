@@ -6,10 +6,8 @@ export const adoptPlant = asyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user?.uid;
   const { plantId, careSchedule } = req.body;
 
-  if (!userId || !plantId || !careSchedule || !Array.isArray(careSchedule)) {
-    return res
-      .status(400)
-      .json({ error: "Missing plantId or valid careSchedule" });
+  if (!userId || !plantId) {
+    return res.status(400).json({ error: "Missing plantId" });
   }
 
   try {
@@ -21,6 +19,14 @@ export const adoptPlant = asyncHandler(async (req: Request, res: Response) => {
 
       if (existing) {
         throw new Error("You are already taking care of this plant!");
+      }
+
+      // Check if tasks already exist for this plant
+      const existingTasksCount = await tx.careTask.count({ where: { plantId } });
+      
+      // If no tasks exist, we MUST have a schedule
+      if (existingTasksCount === 0 && (!careSchedule || !Array.isArray(careSchedule))) {
+         throw new Error("No care schedule provided and none found for this plant.");
       }
 
       // B. Create Caretaker Link
@@ -35,20 +41,20 @@ export const adoptPlant = asyncHandler(async (req: Request, res: Response) => {
         }
       });
 
-      const tasksData = careSchedule.map((task: any) => ({
-        plantId,
-        taskName: task.taskName || "General Care",
-        action: task.action || "CHECK_IN",
-        frequencyDays: task.frequencyDays || 1,
-        xpReward: task.xpReward || 10,
-        instruction: task.instruction || "",
-        // Set first due date to TODAY so they can start immediately
-        nextDueAt: new Date() 
-      }));
+      // C. Create Tasks ONLY if they don't exist
+      if (existingTasksCount === 0) {
+          const tasksData = careSchedule.map((task: any) => ({
+            plantId,
+            taskName: task.taskName || "General Care",
+            action: task.action || "CHECK_IN",
+            frequencyDays: task.frequencyDays || 1,
+            xpReward: task.xpReward || 10,
+            instruction: task.instruction || "",
+            nextDueAt: new Date() 
+          }));
 
-      await tx.careTask.createMany({
-        data: tasksData
-      });
+          await tx.careTask.createMany({ data: tasksData });
+      }
 
       return caretaker;
     });
@@ -66,4 +72,41 @@ export const adoptPlant = asyncHandler(async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Failed to adopt plant" });
   }
 
+});
+
+export const getCareTasks = asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req as any).user?.uid;
+    const { plantId } = req.params;
+  
+    if (!plantId) {
+      return res.status(400).json({ error: "Plant ID required" });
+    }
+  
+    try {
+      const [caretaker, tasks] = await Promise.all([
+        prisma.plantCaretaker.findUnique({
+          where: { userId_plantId: { userId, plantId } }
+        }),
+        prisma.careTask.findMany({
+          where: { plantId }
+        })
+      ]);
+  
+      if (!caretaker) {
+          return res.status(404).json({ error: "You are not a caretaker for this plant" });
+      }
+  
+      res.json({
+          tasks,
+          streak: {
+              current: caretaker.currentStreak,
+              longest: caretaker.longestStreak,
+              points: caretaker.pointsEarned
+          }
+      });
+  
+    } catch (error) {
+      console.error("Get Tasks Error:", error);
+      res.status(500).json({ error: "Failed to fetch tasks" });
+    }
 });

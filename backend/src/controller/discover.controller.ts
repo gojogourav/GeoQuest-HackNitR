@@ -57,7 +57,7 @@ export const AnalyzeAndUpload = asyncHandler(
         TASKS:
         1. Identify the plant.
         2. Assess Health (0-100 score).
-        3. Generate a "Habit Schedule" (Quests) for the user to follow.
+        3. Generate exactly 5 distinct "Habit Schedule" tasks (Quests) SPECIFIC to this identified species (e.g. Cactus vs Fern).
         4. IMAGE SOURCE CHECK: Determine if this image is a direct photo of a real plant OR a photo of a screen/digital display/photo.
         5. NAMING: Provide a "canonicalName" which is the most common, broad English name (e.g. use "Money Plant" for Epipremnum aureum, not "Devil's Ivy").
 
@@ -122,7 +122,15 @@ export const AnalyzeAndUpload = asyncHandler(
       });
 
       const jsonText = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-      return JSON.parse(jsonText);
+      const cleaned = jsonText.replace(/```json|```/g, "").trim(); // Fix Markdown issues
+      try {
+        const parsed = JSON.parse(cleaned);
+        console.log(`[DEBUG] AI Analysis Result: Plant=${parsed.isPlant}, Tasks=${parsed.careSchedule?.length || 0}`);
+        return parsed;
+      } catch (e) {
+        console.error("AI Parse Error in Discover:", e, "Raw:", jsonText);
+        throw new Error("Failed to parse AI response");
+      }
     })();
 
     const [uploadResult, aiResult] = await Promise.all([uploadPromise, analysisPromise]);
@@ -183,6 +191,25 @@ export const AnalyzeAndUpload = asyncHandler(
         });
       }
 
+      // ANTI-SPAM CHECK: User + Species + Location (20m radius)
+      const lat = parseFloat(latitude);
+      const lng = parseFloat(longitude);
+      const threshold = 0.0002; // Approx 20-30m
+
+      const existingNearby = await tx.discovery.findFirst({
+        where: {
+          userId,
+          objectId: object.id,
+          latitude: { gte: lat - threshold, lte: lat + threshold },
+          longitude: { gte: lng - threshold, lte: lng + threshold }
+        }
+      });
+
+      if (existingNearby) {
+        // Return a special flag to handle outside
+        return { duplicate: true, existing: existingNearby };
+      }
+
       // B. Rarity & XP Logic
       const aiScore = aiResult.rarity?.score || 0;
       const generalMultiplier = Math.max(1, aiScore);
@@ -206,6 +233,7 @@ export const AnalyzeAndUpload = asyncHandler(
           latitude: parseFloat(latitude),
           longitude: parseFloat(longitude),
           imageUrl: uploadResult.url,
+          aiConfidence: aiResult.imageSourceConfidence?.realPlant ?? aiResult.confidence, // Save REALNESS score
           rarityScore: finalMultiplier,
           verified: true
         }
@@ -225,6 +253,21 @@ export const AnalyzeAndUpload = asyncHandler(
         }
       });
 
+      // Save care schedule immediately
+      if (aiResult.careSchedule && Array.isArray(aiResult.careSchedule)) {
+         const tasksData = aiResult.careSchedule.map((task: any) => ({
+            plantId: plant.id,
+            taskName: task.taskName || "General Care",
+            action: task.action || "CHECK_IN",
+            frequencyDays: task.frequencyDays || 1,
+            xpReward: task.xpReward || 10,
+            instruction: task.instruction || "",
+            // Not setting nextDueAt yet, will set on adoption
+         }));
+         
+         await tx.careTask.createMany({ data: tasksData });
+      }
+
       await tx.districtObjectRarity.upsert({
         where: { districtId_objectId: { districtId, objectId: object.id } },
         create: { districtId, objectId: object.id, discoveryCount: 1 },
@@ -243,17 +286,25 @@ export const AnalyzeAndUpload = asyncHandler(
       return { discovery, plant, xpEarned, updatedUser, habits: aiResult.careSchedule };
     });
 
+    if ((dbResult as any).duplicate) {
+      return res.status(409).json({ 
+        error: "You have already discovered this plant at this location! Explore further to find new ones." 
+      });
+    }
+
+    const successData = dbResult as any;
+
     return res.status(200).json({
       message: "Discovery & Quest Generated!",
       image_url: uploadResult.url,
       plant_data: aiResult,
       game_data: {
-        xp_earned: dbResult.xpEarned,
-        new_total_xp: dbResult.updatedUser.xp,
-        level: dbResult.updatedUser.level,
-        plant_id: dbResult.plant.id,
+        xp_earned: successData.xpEarned,
+        new_total_xp: successData.updatedUser.xp,
+        level: successData.updatedUser.level,
+        plant_id: successData.plant.id,
         // SEND HABITS TO FRONTEND
-        quests: dbResult.habits
+        quests: successData.habits
       }
     });
   }
@@ -309,9 +360,28 @@ export const getUserDiscoveries = asyncHandler(
         object: true,
         district: {
           select: { district: true }
+        },
+        plant: {
+          select: { 
+            id: true, 
+            healthScore: true, 
+            status: true,
+            tasks: { // Return saved tasks for history adoption
+              select: {
+                taskName: true,
+                action: true,
+                frequencyDays: true,
+                xpReward: true,
+                instruction: true,
+                // No need for id, just the data to display/adopt
+              }
+            }
+          }
         }
       }
     });
+
+    console.log(`[DEBUG] getUserDiscoveries: userId=${userId}, count=${discoveries.length}`);
 
     res.status(200).json({
       success: true,

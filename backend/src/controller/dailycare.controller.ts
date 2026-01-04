@@ -11,6 +11,13 @@ export const verifyDailyCare = asyncHandler(
     // taskId is optional (e.g., if they just want to post a status update)
     const { plantId, taskId } = req.body;
 
+    console.log(`[DEBUG] Verify Request: PlantId=${plantId}, TaskId=${taskId}, User=${userId}`);
+    if (file) {
+      console.log(`[DEBUG] File received: ${file.originalname}, Size: ${file.size}, Mime: ${file.mimetype}`);
+    } else {
+      console.error("[DEBUG] No file received!");
+    }
+
     if (!file || !plantId || !userId) {
       return res.status(400).json({ error: "Photo and Plant ID required" });
     }
@@ -20,7 +27,10 @@ export const verifyDailyCare = asyncHandler(
         select: { latitude: true, longitude: true, healthScore: true }
     });
 
-    if (!plant) return res.status(404).json({ error: "Plant not found" });
+    if (!plant) {
+        console.error(`[DEBUG] Plant not found: ${plantId}`);
+        return res.status(404).json({ error: "Plant not found" });
+    }
 
     const [historyLogs, weatherContext] = await Promise.all([
         prisma.careLog.findMany({
@@ -36,13 +46,20 @@ export const verifyDailyCare = asyncHandler(
       ? historyLogs.map(log => `- ${log.action} on ${new Date(log.createdAt).toLocaleDateString()}`).join("\n")
       : "No previous care history.";
     
-      console.log(`📜 Plant History:\n${historyText}`);
+    console.log(`[DEBUG] Uploading to ImageKit...`);
 
-    const upload = await imagekit.upload({
-      file: file.buffer,
-      fileName: `care_${plantId}_${Date.now()}.jpg`,
-      folder: "/geoquest/care_logs",
-    });
+    let upload;
+    try {
+        upload = await imagekit.upload({
+          file: file.buffer,
+          fileName: `care_${plantId}_${Date.now()}.jpg`,
+          folder: "/geoquest/care_logs",
+        });
+        console.log(`[DEBUG] ImageKit Upload Success: ${upload.url}`);
+    } catch (uploadErr) {
+        console.error("ImageKit Upload Failed:", uploadErr);
+        return res.status(500).json({ error: "Image Upload Failed" });
+    }
     
 
     //  https://api.openweathermap.org/data/2.5/weather?lat=44.34&lon=10.99&appid={API key} 
@@ -57,13 +74,17 @@ export const verifyDailyCare = asyncHandler(
     - Current Local Weather: ${weatherContext}
     
     TASKS:
-    1. Estimate Health Score looking at leaves (0-100).
-    2. Give a 1-sentence status update based on visual health AND history.
-       (Example: "Plant looks healthy, good job watering yesterday!" OR "Soil looks dry despite history, check drainage.")
-    3. Give a specific care tip. If the user watered recently and it looks wet, warn them.
+    1. FIRST, check if the image is valid (visible plant, not black/blurry/random object).
+    2. If Invalid, set validImage: false and provide reason.
+    3. If Valid:
+       - Estimate Health Score looking at leaves (0-100).
+       - Give a status update.
+       - Give a care tip.
     
     Return JSON exactly: 
     { 
+      "validImage": true,
+      "rejectionReason": null,
       "healthScore": 90, 
       "status": "Looking hydrated and happy!",
       "tip": "Since you watered yesterday, let the soil dry out for 2 more days."
@@ -80,7 +101,7 @@ export const verifyDailyCare = asyncHandler(
           parts: [
             {
               inlineData: {
-                mimeType: file.mimetype || "image/jpeg",
+                mimeType: (file.mimetype === "application/octet-stream" ? "image/jpeg" : file.mimetype) || "image/jpeg",
                 data: file.buffer.toString("base64"),
               },
             },
@@ -91,11 +112,27 @@ export const verifyDailyCare = asyncHandler(
       config: { responseMimeType: "application/json" },
     });
 
+    let healthData;
     const jsonText =
       response.text ||
       response.candidates?.[0]?.content?.parts?.[0]?.text ||
       "{}";
-    const healthData = JSON.parse(jsonText);
+    
+    // Clean markdown code blocks if present
+    const cleanedJson = jsonText.replace(/```json|```/g, "").trim();
+
+    try {
+      healthData = JSON.parse(cleanedJson);
+    } catch (e) {
+      console.error("AI JSON Parse Error:", e, "Raw Text:", jsonText);
+      // FAIL if we can't parse. Do not assume success for anti-cheat.
+      return res.status(422).json({ error: "AI Analysis Failed. Please try a clearer photo." });
+    }
+
+    if (healthData.validImage === false) {
+       console.log(`[DEBUG] Image Rejected: ${healthData.rejectionReason}`);
+       return res.status(400).json({ error: healthData.rejectionReason || "Image not clear or not a plant." });
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.plant.update({
@@ -135,6 +172,60 @@ export const verifyDailyCare = asyncHandler(
         where: { id: userId },
         data: { xp: { increment: xpReward } },
       });
+
+      // --- Streak Logic ---
+      const caretaker = await tx.plantCaretaker.findUnique({
+        where: { userId_plantId: { userId, plantId } }
+      });
+
+      if (caretaker) {
+          const now = new Date();
+          const lastLog = caretaker.lastLogDate;
+          
+          let newStreak = caretaker.currentStreak;
+
+          if (lastLog) {
+            // Check if last log was "yesterday"
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            const isYesterday = 
+                lastLog.getDate() === yesterday.getDate() &&
+                lastLog.getMonth() === yesterday.getMonth() &&
+                lastLog.getFullYear() === yesterday.getFullYear();
+            
+            const isToday = 
+                lastLog.getDate() === now.getDate() &&
+                lastLog.getMonth() === now.getMonth() &&
+                lastLog.getFullYear() === now.getFullYear();
+
+            if (isYesterday) {
+                newStreak += 1;
+            } else if (!isToday) {
+                // If not yesterday and not today, steak breaks
+                newStreak = 1;
+            }
+            // If isToday, streak remains same (already incremented for today)
+          } else {
+             newStreak = 1;
+          }
+          
+          const newLongest = Math.max(newStreak, caretaker.longestStreak);
+
+          await tx.plantCaretaker.update({
+              where: { userId_plantId: { userId, plantId } },
+              data: {
+                  currentStreak: newStreak,
+                  longestStreak: newLongest,
+                  lastLogDate: now,
+                  pointsEarned: { increment: 10 } // Bonus points for care
+              }
+          });
+      }
+
+    }, {
+      maxWait: 5000,
+      timeout: 20000 
     });
 
     res.json({

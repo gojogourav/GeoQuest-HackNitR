@@ -15,6 +15,7 @@ import 'package:frontend/screens/cameraScreen.dart';
 import 'package:frontend/screens/imagePreviewScreen.dart';
 import 'package:frontend/screens/storedImageScreen.dart';
 import 'package:frontend/screens/leader.dart';
+import 'package:frontend/screens/myGardenScreen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -615,20 +616,16 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(width: 14),
                           Expanded(
                             child: _actionTile(
-                              tileIcon: Icons.logout,
-                              label: "LogOut",
-                              color: Colors.purple,
-                              onTap: () async {
-                                final auth = AuthService();
-                                await auth.signOut();
-                                if (mounted) {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const LoginPage(),
-                                    ),
-                                  );
-                                }
+                              tileIcon: Icons.yard,
+                              label: "My Garden",
+                              color: Colors.redAccent,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const MyGardenScreen(),
+                                  ),
+                                );
                               },
                             ),
                           ),

@@ -114,6 +114,8 @@ export const getXPHistory = asyncHandler(async (req: Request, res: Response) => 
     take: 20
   });
 
+  console.log(`[DEBUG] getXPHistory: userId=${userId}, discoveries=${discoveries.length}, logs=${careLogs.length}`);
+
   // 3. Normalize & Merge
   const discoveryItems = discoveries.map(d => ({
     type: "DISCOVERY",
